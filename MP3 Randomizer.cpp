@@ -3,6 +3,9 @@
 
 /*
 	https://learn.microsoft.com/en-us/cpp/windows/walkthrough-creating-windows-desktop-applications-cpp?view=msvc-170
+	https://learn.microsoft.com/en-us/windows/win32/learnwin32/your-first-windows-program
+	https://learn.microsoft.com/en-us/windows/win32/learnwin32/window-messages
+	https://learn.microsoft.com/en-us/windows/win32/learnwin32/module-2--using-com-in-your-windows-program
 */
 
 #include <windows.h>
@@ -11,8 +14,8 @@
 #include <string>
 #include <tchar.h>
 
-#define VERSION _T("v0.1.0")
-#define TITLE _T("MP3 Randomizer")
+#define VERSION _T("v0.1.1")
+#define TITLE _T("MP3 Randomizer II")
 
 // Global variables
 
@@ -28,6 +31,7 @@ HINSTANCE hInst;
 
 // Forward declarations of functions included in this code module:
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+void PaintWindow(HWND hWnd);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -48,11 +52,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	wcex.hIconSm = LoadIcon(wcex.hInstance, IDI_APPLICATION);
 
 	if (!RegisterClassEx(&wcex)) {
-		MessageBox(NULL,
-			_T("Call to RegisterClassEx failed!"),
-			_T("Windows Desktop Guided Tour"),
-			NULL);
-
+		MessageBox(NULL, _T("Call to RegisterClassEx failed!"), _T("Windows Desktop Guided Tour"), NULL);
 		return 1;
 	}
 
@@ -84,11 +84,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	);
 
 	if (!hWnd) {
-		MessageBox(NULL,
-			_T("Call to CreateWindow failed!"),
-			_T("Windows Desktop Guided Tour"),
-			NULL);
-
+		MessageBox(NULL, _T("Call to CreateWindow failed!"), _T("Windows Desktop Guided Tour"), NULL);
 		return 1;
 	}
 
@@ -108,31 +104,19 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	return (int)msg.wParam;
 }
 
-//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
-//
-//  PURPOSE:  Processes messages for the main window.
-//
-//  WM_PAINT    - Paint the main window
-//  WM_DESTROY  - post a quit message and return
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	PAINTSTRUCT ps;
-	HDC hdc;
-	TCHAR greeting[] = _T("Hello, Windows desktop!");
+	//PAINTSTRUCT ps;
+	//HDC hdc;
+	//TCHAR greeting[] = _T("Hello, Windows desktop!");
 
 	switch (message) {
 	case WM_PAINT:
-		hdc = BeginPaint(hWnd, &ps);
-
-		// Here your application is laid out.
-		// For this introduction, we just print out "Hello, Windows desktop!"
-		// in the top left corner.
-		TextOut(hdc, 5, 5, greeting, (int)_tcslen(greeting));
-		// End application-specific layout section.
-
-		EndPaint(hWnd, &ps);
+		PaintWindow(hWnd);
 		break;
 	case WM_DESTROY:
-		PostQuitMessage(0);
+		if (MessageBox(hWnd, L"Really quit?", TITLE, MB_OKCANCEL) == IDOK) {
+			PostQuitMessage(0);
+		}
 		break;
 	default:
 		return DefWindowProc(hWnd, message, wParam, lParam);
@@ -140,4 +124,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	}
 
 	return 0;
+}
+void PaintWindow(HWND hWnd) {
+	PAINTSTRUCT ps;
+	HDC hdc;
+	TCHAR greeting[] = _T("Hello, Windows desktop!");
+	hdc = BeginPaint(hWnd, &ps);
+	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+	TextOut(hdc, 5, 5, greeting, (int)_tcslen(greeting));
+	EndPaint(hWnd, &ps);
 }
