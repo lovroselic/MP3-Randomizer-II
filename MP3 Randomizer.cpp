@@ -1,11 +1,10 @@
-// HelloWindowsDesktop.cpp
-// compile with: /D_UNICODE /DUNICODE /DWIN32 /D_WINDOWS /c
-
 /*
 	https://learn.microsoft.com/en-us/cpp/windows/walkthrough-creating-windows-desktop-applications-cpp?view=msvc-170
 	https://learn.microsoft.com/en-us/windows/win32/learnwin32/your-first-windows-program
 	https://learn.microsoft.com/en-us/windows/win32/learnwin32/window-messages
 	https://learn.microsoft.com/en-us/windows/win32/learnwin32/module-2--using-com-in-your-windows-program
+	https://stackoverflow.com/questions/30135494/win32-api-c-menu-bar
+	https://learn.microsoft.com/en-us/windows/win32/winmsg/windows?redirectedfrom=MSDN
 */
 
 #include <windows.h>
@@ -14,16 +13,16 @@
 #include <string>
 #include <tchar.h>
 
-#define VERSION _T("v0.1.1")
+//#include "C:\Users\lovro\OneDrive\Documents\C++\MP3 Randomizer II\resource.h"
+#include "resource.h"
+
+#define VERSION _T("v0.1.2")
 #define TITLE _T("MP3 Randomizer II")
 
 // Global variables
 
 // The main window class name.
 static TCHAR szWindowClass[] = _T("MP3 Randomizer");
-
-// The string that appears in the application's title bar.
-//static TCHAR szTitle[] = _T(TITLE);
 static TCHAR szTitle[100];
 
 // Stored instance handle for use in Win32 API calls such as FindResource
@@ -59,28 +58,32 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	// Store instance handle in our global variable
 	hInst = hInstance;
 
-	// The parameters to CreateWindowEx explained:
-	// WS_EX_OVERLAPPEDWINDOW : An optional extended window style.
-	// szWindowClass: the name of the application
-	// szTitle: the text that appears in the title bar
-	// WS_OVERLAPPEDWINDOW: the type of window to create
-	// CW_USEDEFAULT, CW_USEDEFAULT: initial position (x, y)
-	// 500, 100: initial size (width, length)
-	// NULL: the parent of this window
-	// NULL: this application does not have a menu bar
-	// hInstance: the first parameter from WinMain
-	// NULL: not used in this application
+	// Load the menu resource
+	HMENU hMenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_MENU1));
+
+	if (!hMenu) {
+		MessageBox(NULL, _T("Failed to load menu resource!"), _T("Error"), MB_ICONERROR);
+		return 1;
+	}
+
+	// Extract the first (and only) menu from the loaded menu resource
+	HMENU hSubMenu = GetSubMenu(hMenu, 0);
+	if (!hSubMenu) {
+		MessageBox(NULL, _T("Failed to get sub-menu!"), _T("Error"), MB_ICONERROR);
+		return 1;
+	}
+
 	HWND hWnd = CreateWindowEx(
-		WS_EX_OVERLAPPEDWINDOW,
-		szWindowClass,
-		szTitle,
-		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, CW_USEDEFAULT,
-		500, 100,
-		NULL,
-		NULL,
-		hInstance,
-		NULL
+		WS_EX_OVERLAPPEDWINDOW,									// WS_EX_OVERLAPPEDWINDOW : An optional extended window style.
+		szWindowClass,											// szWindowClass: the name of the application
+		szTitle,												// szTitle: the text that appears in the title bar
+		WS_OVERLAPPEDWINDOW,									// WS_OVERLAPPEDWINDOW: the type of window to create
+		CW_USEDEFAULT, CW_USEDEFAULT,							// CW_USEDEFAULT, CW_USEDEFAULT: initial position (x, y)
+		500, 100,												// 500, 100: initial size (width, length)
+		NULL,													// NULL: the parent of this window
+		hMenu,													// hMenu: the menu handle loaded from resources
+		hInstance,												// hInstance: the first parameter from WinMain
+		NULL													// NULL: not used in this application
 	);
 
 	if (!hWnd) {
@@ -105,9 +108,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-	//PAINTSTRUCT ps;
-	//HDC hdc;
-	//TCHAR greeting[] = _T("Hello, Windows desktop!");
 
 	switch (message) {
 	case WM_PAINT:
