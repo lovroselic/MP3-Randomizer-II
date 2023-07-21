@@ -13,10 +13,9 @@
 #include <string>
 #include <tchar.h>
 
-//#include "C:\Users\lovro\OneDrive\Documents\C++\MP3 Randomizer II\resource.h"
 #include "resource.h"
 
-#define VERSION _T("v0.1.2")
+#define VERSION _T("v0.1.3")
 #define TITLE _T("MP3 Randomizer II")
 
 // Global variables
@@ -31,6 +30,8 @@ HINSTANCE hInst;
 // Forward declarations of functions included in this code module:
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void PaintWindow(HWND hWnd);
+INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -109,6 +110,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
+	WORD wmId = LOWORD(wParam);
+	WORD wmEvent = HIWORD(wParam);
+
 	switch (message) {
 	case WM_PAINT:
 		PaintWindow(hWnd);
@@ -118,6 +122,31 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			PostQuitMessage(0);
 		}
 		break;
+	case WM_COMMAND:
+
+		switch (wmId) {
+		case ID_HELP_ABOUT:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG1), hWnd, AboutDlgProc);
+			break;
+		case ID_SETUP_QUIT:
+			if (MessageBox(hWnd, L"Really quit?", TITLE, MB_OKCANCEL) == IDOK) {
+				PostQuitMessage(0);
+			}
+			break;
+		case ID_SETUP_INPUTFOLDER:
+		case ID_SETUP_OUTPUTFOLDER:
+		case ID_ACTION_FINDMUSIC:
+		case ID_ACTION_SAVELIST:
+		case ID_ACTION_LOADLIST:
+		case ID_ACTION_RANDOMIZE:
+		case ID_ACTION_COPYTOOUTPUT:
+		case ID_HELP_HELP:
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), hWnd, NotYetProc);
+			break;
+
+		default:
+			return DefWindowProc(hWnd, message, wParam, lParam);
+		}
 	default:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 		break;
@@ -133,4 +162,36 @@ void PaintWindow(HWND hWnd) {
 	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
 	TextOut(hdc, 5, 5, greeting, (int)_tcslen(greeting));
 	EndPaint(hWnd, &ps);
+}
+
+// Dialog procedure for the About dialog box
+INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+	switch (message) {
+	case WM_INITDIALOG:
+		// Initialize dialog box controls and data here
+		SetDlgItemText(hDlg, IDC_STATIC2, VERSION);
+		return (INT_PTR)TRUE;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+	switch (message) {
+	case WM_INITDIALOG:
+		// Initialize dialog box controls and data here
+		return (INT_PTR)TRUE;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK) {
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
 }
