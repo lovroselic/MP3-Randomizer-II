@@ -5,6 +5,8 @@
 	https://learn.microsoft.com/en-us/windows/win32/learnwin32/module-2--using-com-in-your-windows-program
 	https://stackoverflow.com/questions/30135494/win32-api-c-menu-bar
 	https://learn.microsoft.com/en-us/windows/win32/winmsg/windows?redirectedfrom=MSDN
+	https://learn.microsoft.com/en-us/windows/win32/learnwin32/managing-application-state-
+
 */
 
 #include <windows.h>
@@ -12,13 +14,19 @@
 #include <string.h>
 #include <string>
 #include <tchar.h>
+#include <ShObjIdl.h>
+#include <ShlObj.h>
 
 #include "resource.h"
 
-#define VERSION _T("v0.1.3")
+#define VERSION _T("v0.1.4")
 #define TITLE _T("MP3 Randomizer II")
 
 // Global variables
+struct StateInfo {
+	std::wstring inputFolder;
+	std::wstring outputFolder;
+};
 
 // The main window class name.
 static TCHAR szWindowClass[] = _T("MP3 Randomizer");
@@ -32,8 +40,17 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void PaintWindow(HWND hWnd);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+std::wstring ShowFolderBrowserDialog(HWND hWnd);
+inline StateInfo* GetAppState(HWND hwnd);
+void DebugStateDisplay(HWND hWnd);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
+
+	StateInfo* pState = new (std::nothrow) StateInfo;
+
+	if (pState == NULL) {
+		return 0;
+	}
 
 	_stprintf_s(szTitle, _T("%s %s"), TITLE, VERSION);
 
@@ -80,11 +97,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		szTitle,												// szTitle: the text that appears in the title bar
 		WS_OVERLAPPEDWINDOW,									// WS_OVERLAPPEDWINDOW: the type of window to create
 		CW_USEDEFAULT, CW_USEDEFAULT,							// CW_USEDEFAULT, CW_USEDEFAULT: initial position (x, y)
-		500, 100,												// 500, 100: initial size (width, length)
+		500, 200,												// 500, 100: initial size (width, length)
 		NULL,													// NULL: the parent of this window
 		hMenu,													// hMenu: the menu handle loaded from resources
 		hInstance,												// hInstance: the first parameter from WinMain
-		NULL													// NULL: not used in this application
+		pState													// pointer to state
 	);
 
 	if (!hWnd) {
@@ -112,6 +129,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 	WORD wmId = LOWORD(wParam);
 	WORD wmEvent = HIWORD(wParam);
+	std::wstring selectedFolderPath;
+
+	StateInfo* pState;
+	if (message == WM_CREATE) {
+		CREATESTRUCT* pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
+		pState = reinterpret_cast<StateInfo*>(pCreate->lpCreateParams);
+		SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)pState);
+	}
+	else {
+		pState = GetAppState(hWnd);
+	}
 
 	switch (message) {
 	case WM_PAINT:
@@ -123,7 +151,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 		}
 		break;
 	case WM_COMMAND:
-
 		switch (wmId) {
 		case ID_HELP_ABOUT:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG1), hWnd, AboutDlgProc);
@@ -134,7 +161,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			}
 			break;
 		case ID_SETUP_INPUTFOLDER:
+			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
+			pState->inputFolder = selectedFolderPath;
+			DebugStateDisplay(hWnd);
+			break;
 		case ID_SETUP_OUTPUTFOLDER:
+			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
+			pState->outputFolder = selectedFolderPath;
+			DebugStateDisplay(hWnd);
+			break;
 		case ID_ACTION_FINDMUSIC:
 		case ID_ACTION_SAVELIST:
 		case ID_ACTION_LOADLIST:
@@ -194,4 +229,63 @@ INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 		break;
 	}
 	return (INT_PTR)FALSE;
+}
+
+std::wstring ShowFolderBrowserDialog(HWND hWnd) {
+	HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+	std::wstring folderPath;
+
+	if (SUCCEEDED(hr)) {
+		IFileDialog* pFileDialog;
+		hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFileDialog));
+
+		if (SUCCEEDED(hr)) {
+			// Set options for the folder browser dialog
+			DWORD dwOptions;
+			pFileDialog->GetOptions(&dwOptions);
+			pFileDialog->SetOptions(dwOptions | FOS_PICKFOLDERS);
+
+			// Show the folder browser dialog
+			if (pFileDialog->Show(hWnd) == S_OK) {
+				IShellItem* pItem;
+				if (pFileDialog->GetResult(&pItem) == S_OK) {
+					PWSTR pszFolderPath;
+					if (SUCCEEDED(pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFolderPath)) && pszFolderPath) {
+						// Convert to std::wstring and store in folderPath variable
+						folderPath = pszFolderPath;
+						CoTaskMemFree(pszFolderPath);
+					}
+					pItem->Release();
+				}
+			}
+
+			pFileDialog->Release();
+		}
+
+		CoUninitialize();
+	}
+
+	return folderPath;
+}
+
+inline StateInfo* GetAppState(HWND hwnd) {
+	LONG_PTR ptr = GetWindowLongPtr(hwnd, GWLP_USERDATA);
+	StateInfo* pState = reinterpret_cast<StateInfo*>(ptr);
+	return pState;
+}
+
+void DebugStateDisplay(HWND hWnd) {
+	StateInfo* pState;
+	pState = GetAppState(hWnd);
+
+	OutputDebugString(L"Input: ");
+	OutputDebugString(pState->inputFolder.c_str());
+	OutputDebugString(L"\n");
+
+	OutputDebugString(L"Output: ");
+	OutputDebugString(pState->outputFolder.c_str());
+	OutputDebugString(L"\n");
+
+	OutputDebugString(L"\n");
+	return;
 }
