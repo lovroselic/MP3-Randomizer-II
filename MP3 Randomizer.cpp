@@ -19,13 +19,17 @@
 
 #include "resource.h"
 
-#define VERSION _T("v0.1.4")
+#define VERSION _T("v0.1.5")
 #define TITLE _T("MP3 Randomizer II")
+#define DEFAULT_N  _T("900")
 
 // Global variables
 struct StateInfo {
 	std::wstring inputFolder;
 	std::wstring outputFolder;
+	std::wstring N = DEFAULT_N;
+	std::wstring selected = _T("0");
+	std::wstring found = _T("0");
 };
 
 // The main window class name.
@@ -97,7 +101,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		szTitle,												// szTitle: the text that appears in the title bar
 		WS_OVERLAPPEDWINDOW,									// WS_OVERLAPPEDWINDOW: the type of window to create
 		CW_USEDEFAULT, CW_USEDEFAULT,							// CW_USEDEFAULT, CW_USEDEFAULT: initial position (x, y)
-		500, 200,												// 500, 100: initial size (width, length)
+		800, 400,												// 500, 100: initial size (width, length)
 		NULL,													// NULL: the parent of this window
 		hMenu,													// hMenu: the menu handle loaded from resources
 		hInstance,												// hInstance: the first parameter from WinMain
@@ -163,11 +167,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 		case ID_SETUP_INPUTFOLDER:
 			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
 			pState->inputFolder = selectedFolderPath;
+			InvalidateRect(hWnd, NULL, TRUE); // Force window repaint
+			//PaintWindow(hWnd);
 			DebugStateDisplay(hWnd);
 			break;
 		case ID_SETUP_OUTPUTFOLDER:
 			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
 			pState->outputFolder = selectedFolderPath;
+			InvalidateRect(hWnd, NULL, TRUE); // Force window repaint
+			//PaintWindow(hWnd);
 			DebugStateDisplay(hWnd);
 			break;
 		case ID_ACTION_FINDMUSIC:
@@ -182,6 +190,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
 		}
+		break;
 	default:
 		return DefWindowProc(hWnd, message, wParam, lParam);
 		break;
@@ -190,12 +199,35 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	return 0;
 }
 void PaintWindow(HWND hWnd) {
+	int x1 = 5;
+	int x2 = 120;
+	int y = 5;
+	int dy = 20;
 	PAINTSTRUCT ps;
 	HDC hdc;
-	TCHAR greeting[] = _T("Hello, Windows desktop!");
+	StateInfo* pState;
+	pState = GetAppState(hWnd);
+	TCHAR inputFolder[] = _T("Input folder: ");
+	TCHAR outputFolder[] = _T("Output folder: ");
+	TCHAR selected[] = _T("Files to copy: ");
+	TCHAR selectedNow[] = _T("Files selected: ");
+	TCHAR found[] = _T("Files found: ");
 	hdc = BeginPaint(hWnd, &ps);
 	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
-	TextOut(hdc, 5, 5, greeting, (int)_tcslen(greeting));
+	TextOut(hdc, x1, y, inputFolder, (int)_tcslen(inputFolder));
+	TextOut(hdc, x2, y, pState->inputFolder.c_str(), static_cast<int>(pState->inputFolder.length()));
+	y += dy;
+	TextOut(hdc, x1, y, outputFolder, (int)_tcslen(outputFolder));
+	TextOut(hdc, x2, y, pState->outputFolder.c_str(), static_cast<int>(pState->outputFolder.length()));
+	y += dy;
+	TextOut(hdc, x1, y, selected, (int)_tcslen(selected));
+	TextOut(hdc, x2, y, pState->N.c_str(), static_cast<int>(pState->N.length()));
+	y += dy;
+	TextOut(hdc, x1, y, found, (int)_tcslen(found));
+	TextOut(hdc, x2, y, pState->found.c_str(), static_cast<int>(pState->found.length()));
+	y += dy;
+	TextOut(hdc, x1, y, selectedNow, (int)_tcslen(selectedNow));
+	TextOut(hdc, x2, y, pState->selected.c_str(), static_cast<int>(pState->selected.length()));
 	EndPaint(hWnd, &ps);
 }
 
@@ -277,6 +309,7 @@ inline StateInfo* GetAppState(HWND hwnd) {
 void DebugStateDisplay(HWND hWnd) {
 	StateInfo* pState;
 	pState = GetAppState(hWnd);
+	OutputDebugString(L"******************\n");
 
 	OutputDebugString(L"Input: ");
 	OutputDebugString(pState->inputFolder.c_str());
@@ -286,6 +319,18 @@ void DebugStateDisplay(HWND hWnd) {
 	OutputDebugString(pState->outputFolder.c_str());
 	OutputDebugString(L"\n");
 
+	OutputDebugString(L"N: ");
+	OutputDebugString(pState->N.c_str());
 	OutputDebugString(L"\n");
+
+	OutputDebugString(L"Found: ");
+	OutputDebugString(pState->found.c_str());
+	OutputDebugString(L"\n");
+
+	OutputDebugString(L"Selected: ");
+	OutputDebugString(pState->selected.c_str());
+	OutputDebugString(L"\n");
+
+	OutputDebugString(L"******************\n");
 	return;
 }
