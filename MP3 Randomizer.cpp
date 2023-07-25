@@ -1,12 +1,5 @@
 /*
-	https://learn.microsoft.com/en-us/cpp/windows/walkthrough-creating-windows-desktop-applications-cpp?view=msvc-170
-	https://learn.microsoft.com/en-us/windows/win32/learnwin32/your-first-windows-program
-	https://learn.microsoft.com/en-us/windows/win32/learnwin32/window-messages
-	https://learn.microsoft.com/en-us/windows/win32/learnwin32/module-2--using-com-in-your-windows-program
-	https://stackoverflow.com/questions/30135494/win32-api-c-menu-bar
-	https://learn.microsoft.com/en-us/windows/win32/winmsg/windows?redirectedfrom=MSDN
-	https://learn.microsoft.com/en-us/windows/win32/learnwin32/managing-application-state-
-
+	https://stackoverflow.com/questions/53642885/how-to-get-text-from-dialogbox-without-global-variable-usage
 */
 
 #include <windows.h>
@@ -16,12 +9,12 @@
 #include <tchar.h>
 #include <ShObjIdl.h>
 #include <ShlObj.h>
-
 #include "resource.h"
 
-#define VERSION _T("v0.1.5")
+#define VERSION _T("v0.2.0")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
+#define MAX_INPUT_NUMBER_SIZE 3
 
 // Global variables
 struct StateInfo {
@@ -32,29 +25,25 @@ struct StateInfo {
 	std::wstring found = _T("0");
 };
 
-// The main window class name.
 static TCHAR szWindowClass[] = _T("MP3 Randomizer");
 static TCHAR szTitle[100];
 
-// Stored instance handle for use in Win32 API calls such as FindResource
 HINSTANCE hInst;
 
-// Forward declarations of functions included in this code module:
+// Forward declarations of functions :
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-void PaintWindow(HWND hWnd);
+void PaintWindow(HWND hWnd, StateInfo* pState);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 std::wstring ShowFolderBrowserDialog(HWND hWnd);
 inline StateInfo* GetAppState(HWND hwnd);
-void DebugStateDisplay(HWND hWnd);
+void DebugStateDisplay(StateInfo* pState);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
 	StateInfo* pState = new (std::nothrow) StateInfo;
-
-	if (pState == NULL) {
-		return 0;
-	}
+	if (pState == NULL) return 0;
 
 	_stprintf_s(szTitle, _T("%s %s"), TITLE, VERSION);
 
@@ -114,8 +103,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	}
 
 	// The parameters to ShowWindow explained:
-	// hWnd: the value returned from CreateWindow
-	// nCmdShow: the fourth parameter from WinMain
+		// hWnd: the value returned from CreateWindow
+		// nCmdShow: the fourth parameter from WinMain
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
@@ -126,6 +115,8 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		DispatchMessage(&msg);
 	}
 
+	delete pState;
+
 	return (int)msg.wParam;
 }
 
@@ -134,6 +125,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	WORD wmId = LOWORD(wParam);
 	WORD wmEvent = HIWORD(wParam);
 	std::wstring selectedFolderPath;
+	INT_PTR callback_result;
+	int enteredNumber = 0;
 
 	StateInfo* pState;
 	if (message == WM_CREATE) {
@@ -147,7 +140,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 	switch (message) {
 	case WM_PAINT:
-		PaintWindow(hWnd);
+		PaintWindow(hWnd, pState);
 		break;
 	case WM_DESTROY:
 		if (MessageBox(hWnd, L"Really quit?", TITLE, MB_OKCANCEL) == IDOK) {
@@ -167,16 +160,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 		case ID_SETUP_INPUTFOLDER:
 			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
 			pState->inputFolder = selectedFolderPath;
-			InvalidateRect(hWnd, NULL, TRUE); // Force window repaint
-			//PaintWindow(hWnd);
-			DebugStateDisplay(hWnd);
+			InvalidateRect(hWnd, NULL, TRUE);
+			DebugStateDisplay( pState);
 			break;
 		case ID_SETUP_OUTPUTFOLDER:
 			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
 			pState->outputFolder = selectedFolderPath;
-			InvalidateRect(hWnd, NULL, TRUE); // Force window repaint
-			//PaintWindow(hWnd);
-			DebugStateDisplay(hWnd);
+			InvalidateRect(hWnd, NULL, TRUE);
+			DebugStateDisplay(pState);
+			break;
+		case ID_SETUP_NUMBEROFFILES:
+			callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, (LPARAM)pState);
+			//callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, 0);
+			if (callback_result) {
+				OutputDebugString(L"ID_SETUP_NUMBEROFFILES (pState->N): ");
+				OutputDebugString(pState->N.c_str());
+				OutputDebugString(L"\n");
+			}
+			InvalidateRect(hWnd, NULL, TRUE);
+			DebugStateDisplay(pState);
 			break;
 		case ID_ACTION_FINDMUSIC:
 		case ID_ACTION_SAVELIST:
@@ -198,18 +200,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 	return 0;
 }
-void PaintWindow(HWND hWnd) {
+void PaintWindow(HWND hWnd, StateInfo* pState) {
 	int x1 = 5;
 	int x2 = 120;
 	int y = 5;
 	int dy = 20;
 	PAINTSTRUCT ps;
 	HDC hdc;
-	StateInfo* pState;
-	pState = GetAppState(hWnd);
 	TCHAR inputFolder[] = _T("Input folder: ");
 	TCHAR outputFolder[] = _T("Output folder: ");
-	TCHAR selected[] = _T("Files to copy: ");
+	TCHAR selected[] = _T("N Files to copy: ");
 	TCHAR selectedNow[] = _T("Files selected: ");
 	TCHAR found[] = _T("Files found: ");
 	hdc = BeginPaint(hWnd, &ps);
@@ -235,12 +235,52 @@ void PaintWindow(HWND hWnd) {
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 	case WM_INITDIALOG:
-		// Initialize dialog box controls and data here
 		SetDlgItemText(hDlg, IDC_STATIC2, VERSION);
 		return (INT_PTR)TRUE;
 	case WM_COMMAND:
-		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
+		if (LOWORD(wParam) == IDOK) {
 			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+	StateInfo* pState = reinterpret_cast<StateInfo*>(lParam);
+	int number;
+	switch (message) {
+	case WM_INITDIALOG:
+		SetDlgItemText(hDlg, IDC_NUMBER_EDIT, pState->N.c_str());
+		OutputDebugString(L"********* CALLBACK WM_INITDIALOG (pState->N): ");
+		OutputDebugString(pState->N.c_str()); //no throw
+		OutputDebugString(L"\n");
+		return (INT_PTR)TRUE;
+	case WM_COMMAND:
+		switch (LOWORD(wParam)) {
+		case IDOK:
+			TCHAR buffer[MAX_INPUT_NUMBER_SIZE + 1]; // +1 for null-terminator
+			GetDlgItemText(hDlg, IDC_NUMBER_EDIT, buffer, MAX_INPUT_NUMBER_SIZE);
+			OutputDebugString(L"buffer:");
+			OutputDebugString(buffer);
+			OutputDebugString(L"\n");
+			number = _ttoi(buffer);
+			if (number >= 1 && number <= 999) {
+				// pState->N = buffer; // throws exception
+				//pState->N = std::wstring(buffer); // throws exception
+				OutputDebugString(L"********* CALLBACK WM_COMMAND (pState->N): ");
+				OutputDebugString(pState->N.c_str()); //throws exception
+				OutputDebugString(L"\n");
+				EndDialog(hDlg, IDOK);
+				return (INT_PTR)TRUE;
+			}
+			else {
+				SetDlgItemText(hDlg, IDC_ERROR_MSG, _T("Enter a number between 1 and 999"));
+			}
+			break;
+		case IDCANCEL:
+			EndDialog(hDlg, IDCANCEL);
 			return (INT_PTR)TRUE;
 		}
 		break;
@@ -251,7 +291,6 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 	case WM_INITDIALOG:
-		// Initialize dialog box controls and data here
 		return (INT_PTR)TRUE;
 	case WM_COMMAND:
 		if (LOWORD(wParam) == IDOK) {
@@ -290,13 +329,10 @@ std::wstring ShowFolderBrowserDialog(HWND hWnd) {
 					pItem->Release();
 				}
 			}
-
 			pFileDialog->Release();
 		}
-
 		CoUninitialize();
 	}
-
 	return folderPath;
 }
 
@@ -306,10 +342,8 @@ inline StateInfo* GetAppState(HWND hwnd) {
 	return pState;
 }
 
-void DebugStateDisplay(HWND hWnd) {
-	StateInfo* pState;
-	pState = GetAppState(hWnd);
-	OutputDebugString(L"******************\n");
+void DebugStateDisplay(StateInfo* pState) {
+	OutputDebugString(L"\n******************\n");
 
 	OutputDebugString(L"Input: ");
 	OutputDebugString(pState->inputFolder.c_str());
