@@ -9,23 +9,27 @@
 #include <tchar.h>
 #include <ShObjIdl.h>
 #include <ShlObj.h>
+
+#include "LS WIN Debug.h"
 #include "resource.h"
 
-#define VERSION _T("v0.2.1")
+#define VERSION _T("v0.2.2")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
-#define MAX_INPUT_NUMBER_SIZE 3
+#define ZERO _T("0");
+
+constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
 
 // Global variables
 struct StateInfo {
 	std::wstring inputFolder;
 	std::wstring outputFolder;
 	std::wstring N = DEFAULT_N;
-	std::wstring selected = _T("0");
-	std::wstring found = _T("0");
+	std::wstring selected = ZERO;
+	std::wstring found = ZERO;
 };
 
-static TCHAR szWindowClass[] = _T("MP3 Randomizer");
+static TCHAR szWindowClass[] = TITLE;
 static TCHAR szTitle[100];
 
 HINSTANCE hInst;
@@ -66,10 +70,9 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		return 1;
 	}
 
-	// Store instance handle in our global variable
 	hInst = hInstance;
 
-	// Load the menu resource
+	// Load resources
 	HMENU hMenu = LoadMenu(hInstance, MAKEINTRESOURCE(IDR_MENU1));
 
 	if (!hMenu) {
@@ -121,13 +124,11 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-
 	WORD wmId = LOWORD(wParam);
 	WORD wmEvent = HIWORD(wParam);
 	std::wstring selectedFolderPath;
 	INT_PTR callback_result;
-	//int enteredNumber = 0;
-	wchar_t gBuffer[MAX_INPUT_NUMBER_SIZE + 1] = { 0 };
+	wchar_t gBuffer[MAX_INPUT_NUMBER_SIZE] = { 0 };
 
 	StateInfo* pState;
 	if (message == WM_CREATE) {
@@ -138,8 +139,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	else {
 		pState = GetAppState(hWnd);
 	}
-
-	//std::wstring numberOfFiles = pState->N;
 
 	switch (message) {
 	case WM_PAINT:
@@ -173,15 +172,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			DebugStateDisplay(pState);
 			break;
 		case ID_SETUP_NUMBEROFFILES:
-			
-			wcscpy_s(gBuffer, MAX_INPUT_NUMBER_SIZE + 1, pState->N.c_str());
+			wcscpy_s(gBuffer, MAX_INPUT_NUMBER_SIZE, pState->N.c_str());
 			callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, (LPARAM)(&gBuffer));
-			//callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, reinterpret_cast<LPARAM>(&numberOfFiles));
 			if (callback_result ==IDOK) {
 				pState->N = gBuffer;
-				OutputDebugString(L"ID_SETUP_NUMBEROFFILES (pState->N): ");
-				OutputDebugString(pState->N.c_str());
-				OutputDebugString(L"\n");
 			}
 			InvalidateRect(hWnd, NULL, TRUE);
 			DebugStateDisplay(pState);
@@ -255,7 +249,6 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 
 INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
 	int number;
-	//wchar_t gBuffer[MAX_INPUT_NUMBER_SIZE + 1] = { 0 };
 	wchar_t* gBuffer;
 
 	switch (message) {
@@ -267,14 +260,9 @@ INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 		switch (LOWORD(wParam)) {
 		case IDOK:
 			gBuffer = (wchar_t*)GetWindowLongPtr(hDlg, DWLP_USER);
-			GetDlgItemText(hDlg, IDC_NUMBER_EDIT, gBuffer, MAX_INPUT_NUMBER_SIZE+1);
+			GetDlgItemText(hDlg, IDC_NUMBER_EDIT, gBuffer, MAX_INPUT_NUMBER_SIZE);
 			number = _ttoi(gBuffer);
 			if (number >= 1 && number <= 999) {
-				
-				OutputDebugString(L"CALLBACK (gBuffer): ");
-				OutputDebugString(gBuffer);
-				OutputDebugString(L"\n");
-		
 				EndDialog(hDlg, IDOK);
 				return (INT_PTR)TRUE;
 			}
@@ -347,27 +335,11 @@ inline StateInfo* GetAppState(HWND hwnd) {
 
 void DebugStateDisplay(StateInfo* pState) {
 	OutputDebugString(L"\n******************\n");
-
-	OutputDebugString(L"Input: ");
-	OutputDebugString(pState->inputFolder.c_str());
-	OutputDebugString(L"\n");
-
-	OutputDebugString(L"Output: ");
-	OutputDebugString(pState->outputFolder.c_str());
-	OutputDebugString(L"\n");
-
-	OutputDebugString(L"N: ");
-	OutputDebugString(pState->N.c_str());
-	OutputDebugString(L"\n");
-
-	OutputDebugString(L"Found: ");
-	OutputDebugString(pState->found.c_str());
-	OutputDebugString(L"\n");
-
-	OutputDebugString(L"Selected: ");
-	OutputDebugString(pState->selected.c_str());
-	OutputDebugString(L"\n");
-
+	ConsoleLog("Input: ", pState->inputFolder);
+	ConsoleLog("Output: ", pState->outputFolder);
+	ConsoleLog("N: ", pState->N);
+	ConsoleLog("Found: ", pState->found);
+	ConsoleLog("Selected: ", pState->selected);
 	OutputDebugString(L"******************\n");
 	return;
 }
