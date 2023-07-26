@@ -11,7 +11,7 @@
 #include <ShlObj.h>
 #include "resource.h"
 
-#define VERSION _T("v0.2.0")
+#define VERSION _T("v0.2.1")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define MAX_INPUT_NUMBER_SIZE 3
@@ -126,7 +126,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	WORD wmEvent = HIWORD(wParam);
 	std::wstring selectedFolderPath;
 	INT_PTR callback_result;
-	int enteredNumber = 0;
+	//int enteredNumber = 0;
+	wchar_t gBuffer[MAX_INPUT_NUMBER_SIZE + 1] = { 0 };
 
 	StateInfo* pState;
 	if (message == WM_CREATE) {
@@ -137,6 +138,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	else {
 		pState = GetAppState(hWnd);
 	}
+
+	//std::wstring numberOfFiles = pState->N;
 
 	switch (message) {
 	case WM_PAINT:
@@ -170,9 +173,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			DebugStateDisplay(pState);
 			break;
 		case ID_SETUP_NUMBEROFFILES:
-			callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, (LPARAM)pState);
-			//callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, 0);
-			if (callback_result) {
+			
+			wcscpy_s(gBuffer, MAX_INPUT_NUMBER_SIZE + 1, pState->N.c_str());
+			callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, (LPARAM)(&gBuffer));
+			//callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, reinterpret_cast<LPARAM>(&numberOfFiles));
+			if (callback_result ==IDOK) {
+				pState->N = gBuffer;
 				OutputDebugString(L"ID_SETUP_NUMBEROFFILES (pState->N): ");
 				OutputDebugString(pState->N.c_str());
 				OutputDebugString(L"\n");
@@ -248,30 +254,27 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 }
 
 INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
-	StateInfo* pState = reinterpret_cast<StateInfo*>(lParam);
 	int number;
+	//wchar_t gBuffer[MAX_INPUT_NUMBER_SIZE + 1] = { 0 };
+	wchar_t* gBuffer;
+
 	switch (message) {
 	case WM_INITDIALOG:
-		SetDlgItemText(hDlg, IDC_NUMBER_EDIT, pState->N.c_str());
-		OutputDebugString(L"********* CALLBACK WM_INITDIALOG (pState->N): ");
-		OutputDebugString(pState->N.c_str()); //no throw
-		OutputDebugString(L"\n");
+		SetDlgItemText(hDlg, IDC_NUMBER_EDIT, (wchar_t*)lParam);
+		SetWindowLongPtr(hDlg, DWLP_USER, lParam);
 		return (INT_PTR)TRUE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case IDOK:
-			TCHAR buffer[MAX_INPUT_NUMBER_SIZE + 1]; // +1 for null-terminator
-			GetDlgItemText(hDlg, IDC_NUMBER_EDIT, buffer, MAX_INPUT_NUMBER_SIZE);
-			OutputDebugString(L"buffer:");
-			OutputDebugString(buffer);
-			OutputDebugString(L"\n");
-			number = _ttoi(buffer);
+			gBuffer = (wchar_t*)GetWindowLongPtr(hDlg, DWLP_USER);
+			GetDlgItemText(hDlg, IDC_NUMBER_EDIT, gBuffer, MAX_INPUT_NUMBER_SIZE+1);
+			number = _ttoi(gBuffer);
 			if (number >= 1 && number <= 999) {
-				// pState->N = buffer; // throws exception
-				//pState->N = std::wstring(buffer); // throws exception
-				OutputDebugString(L"********* CALLBACK WM_COMMAND (pState->N): ");
-				OutputDebugString(pState->N.c_str()); //throws exception
+				
+				OutputDebugString(L"CALLBACK (gBuffer): ");
+				OutputDebugString(gBuffer);
 				OutputDebugString(L"\n");
+		
 				EndDialog(hDlg, IDOK);
 				return (INT_PTR)TRUE;
 			}
