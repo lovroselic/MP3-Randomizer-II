@@ -127,6 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="LS SYSTEM.h" />
     <ClInclude Include="LS WIN Debug.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
@@ -134,6 +135,7 @@
     <ResourceCompile Include="MP3 Randomizer II.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="LS SYSTEM.cpp" />
     <ClCompile Include="LS WIN Debug.cpp" />
     <ClCompile Include="MP3 Randomizer.cpp" />
   </ItemGroup>

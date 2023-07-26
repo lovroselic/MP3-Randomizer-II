@@ -1,5 +1,5 @@
 /*
-	https://stackoverflow.com/questions/53642885/how-to-get-text-from-dialogbox-without-global-variable-usage
+	
 */
 
 #include <windows.h>
@@ -9,16 +9,20 @@
 #include <tchar.h>
 #include <ShObjIdl.h>
 #include <ShlObj.h>
+#include<vector>
 
 #include "LS WIN Debug.h"
+#include "LS SYSTEM.h"
 #include "resource.h"
 
-#define VERSION _T("v0.2.2")
+#define VERSION _T("v0.2.3")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
+#define MP3 _T(".mp3")
 
 constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
+
 
 // Global variables
 struct StateInfo {
@@ -27,6 +31,7 @@ struct StateInfo {
 	std::wstring N = DEFAULT_N;
 	std::wstring selected = ZERO;
 	std::wstring found = ZERO;
+	std::vector<std::wstring> fileList;
 };
 
 static TCHAR szWindowClass[] = TITLE;
@@ -40,7 +45,6 @@ void PaintWindow(HWND hWnd, StateInfo* pState);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
-std::wstring ShowFolderBrowserDialog(HWND hWnd);
 inline StateInfo* GetAppState(HWND hwnd);
 void DebugStateDisplay(StateInfo* pState);
 
@@ -129,6 +133,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	std::wstring selectedFolderPath;
 	INT_PTR callback_result;
 	wchar_t gBuffer[MAX_INPUT_NUMBER_SIZE] = { 0 };
+	std::vector<std::wstring> fileList;
 
 	StateInfo* pState;
 	if (message == WM_CREATE) {
@@ -163,7 +168,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
 			pState->inputFolder = selectedFolderPath;
 			InvalidateRect(hWnd, NULL, TRUE);
-			DebugStateDisplay( pState);
+			DebugStateDisplay(pState);
 			break;
 		case ID_SETUP_OUTPUTFOLDER:
 			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
@@ -174,13 +179,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 		case ID_SETUP_NUMBEROFFILES:
 			wcscpy_s(gBuffer, MAX_INPUT_NUMBER_SIZE, pState->N.c_str());
 			callback_result = DialogBoxParam(hInst, MAKEINTRESOURCE(IDD_DIALOG3), hWnd, NumberInputDialogProc, (LPARAM)(&gBuffer));
-			if (callback_result ==IDOK) {
+			if (callback_result == IDOK) {
 				pState->N = gBuffer;
 			}
 			InvalidateRect(hWnd, NULL, TRUE);
 			DebugStateDisplay(pState);
 			break;
 		case ID_ACTION_FINDMUSIC:
+			pState->fileList = FindFilesInDirectory(pState->inputFolder, MP3);
+			LogVector(pState->fileList);
+			pState->found = std::to_wstring(pState->fileList.size());
+			InvalidateRect(hWnd, NULL, TRUE);
+			DebugStateDisplay(pState);
+			break;
+		case ID_SETUP_SAVECONFIG:
 		case ID_ACTION_SAVELIST:
 		case ID_ACTION_LOADLIST:
 		case ID_ACTION_RANDOMIZE:
@@ -205,6 +217,7 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	int x2 = 120;
 	int y = 5;
 	int dy = 20;
+	int dx = 20;
 	PAINTSTRUCT ps;
 	HDC hdc;
 	TCHAR inputFolder[] = _T("Input folder: ");
@@ -212,8 +225,13 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	TCHAR selected[] = _T("N Files to copy: ");
 	TCHAR selectedNow[] = _T("Files selected: ");
 	TCHAR found[] = _T("Files found: ");
+	TCHAR cfg[] = _T("Active configuration: ");
 	hdc = BeginPaint(hWnd, &ps);
 	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+	TextOut(hdc, x1, y, cfg, (int)_tcslen(cfg));
+	y += dy;
+	x1 += dx;
+	x2 += dx;
 	TextOut(hdc, x1, y, inputFolder, (int)_tcslen(inputFolder));
 	TextOut(hdc, x2, y, pState->inputFolder.c_str(), static_cast<int>(pState->inputFolder.length()));
 	y += dy;
@@ -291,40 +309,6 @@ INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 		break;
 	}
 	return (INT_PTR)FALSE;
-}
-
-std::wstring ShowFolderBrowserDialog(HWND hWnd) {
-	HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-	std::wstring folderPath;
-
-	if (SUCCEEDED(hr)) {
-		IFileDialog* pFileDialog;
-		hr = CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFileDialog));
-
-		if (SUCCEEDED(hr)) {
-			// Set options for the folder browser dialog
-			DWORD dwOptions;
-			pFileDialog->GetOptions(&dwOptions);
-			pFileDialog->SetOptions(dwOptions | FOS_PICKFOLDERS);
-
-			// Show the folder browser dialog
-			if (pFileDialog->Show(hWnd) == S_OK) {
-				IShellItem* pItem;
-				if (pFileDialog->GetResult(&pItem) == S_OK) {
-					PWSTR pszFolderPath;
-					if (SUCCEEDED(pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFolderPath)) && pszFolderPath) {
-						// Convert to std::wstring and store in folderPath variable
-						folderPath = pszFolderPath;
-						CoTaskMemFree(pszFolderPath);
-					}
-					pItem->Release();
-				}
-			}
-			pFileDialog->Release();
-		}
-		CoUninitialize();
-	}
-	return folderPath;
 }
 
 inline StateInfo* GetAppState(HWND hwnd) {
