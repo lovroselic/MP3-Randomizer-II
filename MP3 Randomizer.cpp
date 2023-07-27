@@ -12,13 +12,15 @@
 #include <vector>
 #include <fstream>
 #include <codecvt>
+#include <locale>
+#include <filesystem>
 
 #include "LS WIN Debug.h"
 #include "LS SYSTEM.h"
 #include "LS PROTOTYPES.h"
 #include "resource.h"
 
-#define VERSION _T("v0.3.1")
+#define VERSION _T("v0.3.2")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -43,6 +45,7 @@ static TCHAR configFile[] = L"MP3 Randomizer.cfg";
 static TCHAR listFile[] = L"MP3 Randomizer.list";
 
 HINSTANCE hInst;
+HWND hProgressDialog;
 
 // Forward declarations of functions :
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -57,6 +60,7 @@ void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName);
 void SaveFileList(StateInfo* pState, const std::wstring& fileName);
 void ReadFileList(StateInfo* pState, const std::wstring& fileName);
 void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFileName);
+void UpdateProgressBar(HWND hProgressDialog, int progress);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -222,6 +226,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			DebugStateDisplay(pState);
 			break;
 		case ID_ACTION_COPYTOOUTPUT:
+			break;
 		case ID_HELP_HELP:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), hWnd, NotYetProc);
 			break;
@@ -369,7 +374,7 @@ void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName) {
 
 
 void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName) {
-	std::wofstream file(fileName, std::ios::trunc);				
+	std::wofstream file(fileName, std::ios::trunc);
 
 	if (!file) {
 		ConsoleLog("Error for file: ", fileName);
@@ -383,7 +388,8 @@ void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName) {
 	return;
 }
 
-void SaveFileList(StateInfo* pState, const std::wstring& fileName) {	
+
+void SaveFileList(StateInfo* pState, const std::wstring& fileName) {
 	std::ofstream file(fileName, std::ios::trunc);
 
 	if (!file) {
@@ -391,13 +397,15 @@ void SaveFileList(StateInfo* pState, const std::wstring& fileName) {
 		return;
 	}
 
-	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 	for (const std::wstring& element : pState->fileList) {
-		std::string utf8Str = converter.to_bytes(element);
-		file << utf8Str << std::endl;
+		int utf8Size = WideCharToMultiByte(CP_UTF8, 0, element.c_str(), -1, nullptr, 0, nullptr, nullptr);
+		if (utf8Size > 0) {
+			std::string utf8Str(utf8Size - 1, '\0'); // Reserve space for null-terminator
+			WideCharToMultiByte(CP_UTF8, 0, element.c_str(), -1, utf8Str.data(), utf8Size, nullptr, nullptr);
+			file << utf8Str << std::endl;
+		}
 	}
 	file.close();
-	return;
 }
 
 void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
@@ -408,23 +416,29 @@ void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
 		return;
 	}
 
-	// Use wstring_convert to convert UTF-8 to wstring when reading from the file
-	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
 	std::string line;
 	while (std::getline(file, line)) {
-		std::wstring wstr = converter.from_bytes(line);
-		pState->fileList.push_back(wstr);
+		int wideSize = MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, nullptr, 0);
+		if (wideSize > 0) {
+			std::wstring wstr(wideSize - 1, L'\0'); // Reserve space for null-terminator
+			MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, wstr.data(), wideSize);
+			pState->fileList.push_back(wstr);
+		}
 	}
 
 	file.close();
-	return;
 }
 
 void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFileName) {
+	pState->fileList.clear();
 	ReadFileList(pState, listFileName);
 	LogVector(pState->fileList);
 	pState->found = std::to_wstring(pState->fileList.size());
 	InvalidateRect(hWnd, NULL, TRUE);
 	DebugStateDisplay(pState);
 	return;
+}
+
+void UpdateProgressBar(HWND hProgressDialog, int progress) {
+	SendMessage(GetDlgItem(hProgressDialog, IDC_PROGRESS1), PBM_SETPOS, progress, 0);
 }
