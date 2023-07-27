@@ -17,7 +17,7 @@
 #include "LS SYSTEM.h"
 #include "resource.h"
 
-#define VERSION _T("v0.2.4")
+#define VERSION _T("v0.3.0")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -54,6 +54,7 @@ void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName);
 void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName);
 void SaveFileList(StateInfo* pState, const std::wstring& fileName);
 void ReadFileList(StateInfo* pState, const std::wstring& fileName);
+void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFileName);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -140,7 +141,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	std::wstring selectedFolderPath;
 	INT_PTR callback_result;
 	wchar_t gBuffer[MAX_INPUT_NUMBER_SIZE] = { 0 };
-	//std::vector<std::wstring> fileList;
 
 	StateInfo* pState;
 	if (message == WM_CREATE) {
@@ -155,6 +155,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	switch (message) {
 	case WM_CREATE:
 		ReadStateInfoFromFile(pState, configFile);
+		ActionReadFileList(hWnd, pState, listFile);
 		break;
 	case WM_PAINT:
 		PaintWindow(hWnd, pState);
@@ -209,11 +210,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			SaveFileList(pState, listFile);
 			break;
 		case ID_ACTION_LOADLIST:
-			ReadFileList(pState, listFile);
-			LogVector(pState->fileList);
-			pState->found = std::to_wstring(pState->fileList.size());
-			InvalidateRect(hWnd, NULL, TRUE);
-			DebugStateDisplay(pState);
+			ActionReadFileList(hWnd, pState, listFile);
 			break;
 		case ID_ACTION_RANDOMIZE:
 		case ID_ACTION_COPYTOOUTPUT:
@@ -269,7 +266,6 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	EndPaint(hWnd, &ps);
 }
 
-// Dialog procedure for the About dialog box
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 	case WM_INITDIALOG:
@@ -352,7 +348,6 @@ void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName) {
 	std::wifstream file(fileName);
 
 	if (!file) {
-		// Handle file open error
 		ConsoleLog("File not found: ", fileName);
 		return;
 	}
@@ -360,24 +355,15 @@ void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName) {
 	std::getline(file, pState->inputFolder);
 	std::getline(file, pState->outputFolder);
 	std::getline(file, pState->N);
-
-	/*
-	pState->fileList.clear();
-	std::wstring line;
-	while (std::getline(file, line)) {
-		pState->fileList.push_back(line);
-	}
-	*/
 	file.close();
 	return;
 }
 
 
 void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName) {
-	std::wofstream file(fileName, std::ios::trunc);				// Truncate the file if it exists or create a new one
+	std::wofstream file(fileName, std::ios::trunc);				
 
 	if (!file) {
-		// Handle file open error
 		ConsoleLog("Error for file: ", fileName);
 		return;
 	}
@@ -393,7 +379,6 @@ void SaveFileList(StateInfo* pState, const std::wstring& fileName) {
 	std::ofstream file(fileName, std::ios::trunc);
 
 	if (!file) {
-		// Handle file open error
 		ConsoleLog("Error for file: ", fileName);
 		return;
 	}
@@ -411,7 +396,6 @@ void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
 	std::ifstream file(fileName);
 
 	if (!file) {
-		// Handle file open error
 		ConsoleLog("Error reading file: ", fileName);
 		return;
 	}
@@ -424,6 +408,15 @@ void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
 		pState->fileList.push_back(wstr);
 	}
 
-	// Close the file after reading the data
 	file.close();
+	return;
+}
+
+void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFileName) {
+	ReadFileList(pState, listFileName);
+	LogVector(pState->fileList);
+	pState->found = std::to_wstring(pState->fileList.size());
+	InvalidateRect(hWnd, NULL, TRUE);
+	DebugStateDisplay(pState);
+	return;
 }
