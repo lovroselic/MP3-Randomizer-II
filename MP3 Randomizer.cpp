@@ -15,9 +15,10 @@
 
 #include "LS WIN Debug.h"
 #include "LS SYSTEM.h"
+#include "LS PROTOTYPES.h"
 #include "resource.h"
 
-#define VERSION _T("v0.3.0")
+#define VERSION _T("v0.3.1")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -33,6 +34,7 @@ struct StateInfo {
 	std::wstring selected = ZERO;
 	std::wstring found = ZERO;
 	std::vector<std::wstring> fileList;
+	std::vector<std::wstring> selectedList;
 };
 
 static TCHAR szWindowClass[] = TITLE;
@@ -213,6 +215,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			ActionReadFileList(hWnd, pState, listFile);
 			break;
 		case ID_ACTION_RANDOMIZE:
+			pState->selectedList = SelectRandomElements(pState->fileList, std::stoi(pState->N));
+			LogVector(pState->selectedList);
+			pState->selected = std::to_wstring(pState->selectedList.size());
+			InvalidateRect(hWnd, NULL, TRUE);
+			DebugStateDisplay(pState);
+			break;
 		case ID_ACTION_COPYTOOUTPUT:
 		case ID_HELP_HELP:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), hWnd, NotYetProc);

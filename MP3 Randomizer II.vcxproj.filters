@@ -24,6 +24,9 @@
     <ClInclude Include="LS SYSTEM.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="LS PROTOTYPES.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="MP3 Randomizer II.rc">
@@ -38,6 +41,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="LS SYSTEM.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="LS PROTOTYPES.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
