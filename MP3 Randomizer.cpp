@@ -1,5 +1,5 @@
 /*
-	
+
 */
 
 #include <windows.h>
@@ -9,20 +9,21 @@
 #include <tchar.h>
 #include <ShObjIdl.h>
 #include <ShlObj.h>
-#include<vector>
+#include <vector>
+#include <fstream>
+#include <codecvt>
 
 #include "LS WIN Debug.h"
 #include "LS SYSTEM.h"
 #include "resource.h"
 
-#define VERSION _T("v0.2.3")
+#define VERSION _T("v0.2.4")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
 #define MP3 _T(".mp3")
 
 constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
-
 
 // Global variables
 struct StateInfo {
@@ -36,6 +37,8 @@ struct StateInfo {
 
 static TCHAR szWindowClass[] = TITLE;
 static TCHAR szTitle[100];
+static TCHAR configFile[] = L"MP3 Randomizer.cfg";
+static TCHAR listFile[] = L"MP3 Randomizer.list";
 
 HINSTANCE hInst;
 
@@ -47,6 +50,10 @@ INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, L
 INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 inline StateInfo* GetAppState(HWND hwnd);
 void DebugStateDisplay(StateInfo* pState);
+void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName);
+void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName);
+void SaveFileList(StateInfo* pState, const std::wstring& fileName);
+void ReadFileList(StateInfo* pState, const std::wstring& fileName);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -133,7 +140,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	std::wstring selectedFolderPath;
 	INT_PTR callback_result;
 	wchar_t gBuffer[MAX_INPUT_NUMBER_SIZE] = { 0 };
-	std::vector<std::wstring> fileList;
+	//std::vector<std::wstring> fileList;
 
 	StateInfo* pState;
 	if (message == WM_CREATE) {
@@ -146,6 +153,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	}
 
 	switch (message) {
+	case WM_CREATE:
+		ReadStateInfoFromFile(pState, configFile);
+		break;
 	case WM_PAINT:
 		PaintWindow(hWnd, pState);
 		break;
@@ -193,8 +203,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			DebugStateDisplay(pState);
 			break;
 		case ID_SETUP_SAVECONFIG:
+			SaveStateInfoToFile(pState, configFile);
+			break;
 		case ID_ACTION_SAVELIST:
+			SaveFileList(pState, listFile);
+			break;
 		case ID_ACTION_LOADLIST:
+			ReadFileList(pState, listFile);
+			LogVector(pState->fileList);
+			pState->found = std::to_wstring(pState->fileList.size());
+			InvalidateRect(hWnd, NULL, TRUE);
+			DebugStateDisplay(pState);
+			break;
 		case ID_ACTION_RANDOMIZE:
 		case ID_ACTION_COPYTOOUTPUT:
 		case ID_HELP_HELP:
@@ -326,4 +346,84 @@ void DebugStateDisplay(StateInfo* pState) {
 	ConsoleLog("Selected: ", pState->selected);
 	OutputDebugString(L"******************\n");
 	return;
+}
+
+void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName) {
+	std::wifstream file(fileName);
+
+	if (!file) {
+		// Handle file open error
+		ConsoleLog("File not found: ", fileName);
+		return;
+	}
+
+	std::getline(file, pState->inputFolder);
+	std::getline(file, pState->outputFolder);
+	std::getline(file, pState->N);
+
+	/*
+	pState->fileList.clear();
+	std::wstring line;
+	while (std::getline(file, line)) {
+		pState->fileList.push_back(line);
+	}
+	*/
+	file.close();
+	return;
+}
+
+
+void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName) {
+	std::wofstream file(fileName, std::ios::trunc);				// Truncate the file if it exists or create a new one
+
+	if (!file) {
+		// Handle file open error
+		ConsoleLog("Error for file: ", fileName);
+		return;
+	}
+
+	file << pState->inputFolder << std::endl;
+	file << pState->outputFolder << std::endl;
+	file << pState->N << std::endl;
+	file.close();
+	return;
+}
+
+void SaveFileList(StateInfo* pState, const std::wstring& fileName) {	
+	std::ofstream file(fileName, std::ios::trunc);
+
+	if (!file) {
+		// Handle file open error
+		ConsoleLog("Error for file: ", fileName);
+		return;
+	}
+
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+	for (const std::wstring& element : pState->fileList) {
+		std::string utf8Str = converter.to_bytes(element);
+		file << utf8Str << std::endl;
+	}
+	file.close();
+	return;
+}
+
+void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
+	std::ifstream file(fileName);
+
+	if (!file) {
+		// Handle file open error
+		ConsoleLog("Error reading file: ", fileName);
+		return;
+	}
+
+	// Use wstring_convert to convert UTF-8 to wstring when reading from the file
+	std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+	std::string line;
+	while (std::getline(file, line)) {
+		std::wstring wstr = converter.from_bytes(line);
+		pState->fileList.push_back(wstr);
+	}
+
+	// Close the file after reading the data
+	file.close();
 }
