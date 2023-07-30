@@ -23,11 +23,12 @@ https://learn.microsoft.com/en-us/windows/win32/controls/create-progress-bar-con
 #include "LS PROTOTYPES.h"
 #include "resource.h"
 
-#define VERSION _T("v0.3.4")
+#define VERSION _T("v0.4.0")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
 #define MP3 _T(".mp3")
+#define WM_COPY_COMPLETE WM_USER + 1
 
 namespace fs = std::filesystem;
 
@@ -92,7 +93,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	wcex.hIconSm = LoadIcon(wcex.hInstance, IDI_APPLICATION);
 
 	if (!RegisterClassEx(&wcex)) {
-		MessageBox(NULL, _T("Call to RegisterClassEx failed!"), _T("Windows Desktop Guided Tour"), NULL);
+		MessageBox(NULL, _T("Call to RegisterClassEx failed!"), _T("Error"), NULL);
 		return 1;
 	}
 
@@ -119,7 +120,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		szTitle,												// szTitle: the text that appears in the title bar
 		WS_OVERLAPPEDWINDOW,									// WS_OVERLAPPEDWINDOW: the type of window to create
 		CW_USEDEFAULT, CW_USEDEFAULT,							// CW_USEDEFAULT, CW_USEDEFAULT: initial position (x, y)
-		800, 400,												// 500, 100: initial size (width, length)
+		800, 400,												// initial size (width, length)
 		NULL,													// NULL: the parent of this window
 		hMenu,													// hMenu: the menu handle loaded from resources
 		hInstance,												// hInstance: the first parameter from WinMain
@@ -127,7 +128,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	);
 
 	if (!hWnd) {
-		MessageBox(NULL, _T("Call to CreateWindow failed!"), _T("Windows Desktop Guided Tour"), NULL);
+		MessageBox(NULL, _T("Call to CreateWindow failed!"), _T("Error"), NULL);
 		return 1;
 	}
 	RECT rcClient;
@@ -478,17 +479,16 @@ DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
 			fs::copy(sourceFile, destinationFile, fs::copy_options::overwrite_existing);
 		}
 		catch (const fs::filesystem_error& ex) {
-			// Handle error
+			std::wstringstream errorStream;
+			errorStream << L"Filesystem error when copying file: " << ex.what();
+			ConsoleLog(errorStream.str());
 		}
 
-		// update progress
-		int progress = static_cast<int>((static_cast<float>(i + 1) / numFiles) * 100); //debug
-		ConsoleLog("progress: ", std::to_wstring(progress));	//debug
 		UpdateProgressBar();
 	}
 
 	ShowWindow(hProgressDialog, SW_HIDE);
-	PostQuitMessage(0);
+	PostMessage(hProgressDialog, WM_COPY_COMPLETE, 0, 0);
 	return 0;
 }
 
@@ -498,26 +498,34 @@ void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pSt
 	DWORD threadId;
 	HANDLE hThread = CreateThread(nullptr, 0, CopyFilesThread, pState, 0, &threadId);
 	if (hThread == nullptr) {
-		// Handle error
+		DWORD dwError = GetLastError();
+		std::wstringstream ws;
+		ws << L"Failed to create thread. Error code: " << dwError;
+		ConsoleLog(ws.str());
+		MessageBox(hWnd, L"Failed to start the file copying operation.", L"Error", MB_ICONERROR | MB_OK);
+		return;
 		return;
 	}
 
-	// Show and process the progress dialog
 	ShowWindow(hProgressDialog, SW_SHOW);
 	MSG msg;
 	while (GetMessage(&msg, nullptr, 0, 0)) {
-
+		if (msg.message == WM_COPY_COMPLETE) {
+			ConsoleLog("copy process complete");
+			break;
+		}
 		if (!IsDialogMessage(hProgressDialog, &msg)) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 	}
 	WaitForSingleObject(hThread, INFINITE);
-	CloseHandle(hThread);//??
+	CloseHandle(hThread);
 }
 
 void ExitApp(HWND hWnd) {
 	PostQuitMessage(0);
+	DestroyWindow(hProgressDialog);
 	DestroyWindow(hWnd);
 	ConsoleLog("MP3 randomizer ended!");
 }
