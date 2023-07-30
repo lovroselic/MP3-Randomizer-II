@@ -4,6 +4,20 @@
 
 #include <sstream>
 
+
+//forward declarations
+void ConsoleLog(const char* message);
+
+//templates
+
+template <typename T>
+void ConsoleLog(const T& message ) {
+    std::basic_stringstream<typename T::value_type> wss;
+    wss << message;
+    OutputDebugString(wss.str().c_str());
+    OutputDebugString(L"\n");
+}
+
 template <typename PropertyT>
 void ConsoleLog(const char* label, const PropertyT& property) {
     std::basic_stringstream<typename PropertyT::value_type> wss;

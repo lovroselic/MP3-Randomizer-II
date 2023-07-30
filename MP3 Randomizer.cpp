@@ -23,7 +23,7 @@ https://learn.microsoft.com/en-us/windows/win32/controls/create-progress-bar-con
 #include "LS PROTOTYPES.h"
 #include "resource.h"
 
-#define VERSION _T("v0.3.3")
+#define VERSION _T("v0.3.4")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -65,7 +65,7 @@ void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName);
 void SaveFileList(StateInfo* pState, const std::wstring& fileName);
 void ReadFileList(StateInfo* pState, const std::wstring& fileName);
 void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFileName);
-void UpdateProgressBar(int progress);
+void UpdateProgressBar();
 DWORD WINAPI CopyFilesThread(LPVOID lpParam);
 void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pState);
 void ExitApp(HWND hWnd);
@@ -133,7 +133,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	RECT rcClient;
 	GetClientRect(hWnd, &rcClient);
 	InitCommonControls();
-	hProgressDialog = CreateWindowEx(0, PROGRESS_CLASS, TEXT("Copying..."), WS_CHILD | WS_VISIBLE,
+	hProgressDialog = CreateWindowEx(0, PROGRESS_CLASS, TEXT("Copying..."), WS_CHILD | WS_VISIBLE | PBS_SMOOTH,
 		10, rcClient.bottom - 40, rcClient.right - rcClient.left - 20, 30,
 		hWnd, NULL, hInst, NULL);
 	if (hProgressDialog == NULL) {
@@ -457,10 +457,10 @@ void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFi
 	return;
 }
 
-void UpdateProgressBar(int progress) {
-	SendMessage(hProgressDialog, PBM_SETSTEP, (WPARAM)progress, 0);
+void UpdateProgressBar() {
+	SendMessage(hProgressDialog, PBM_SETSTEP, 1, 0);
 	SendMessage(hProgressDialog, PBM_STEPIT, 0, 0);
-	UpdateWindow(hProgressDialog); //??
+	UpdateWindow(hProgressDialog); 
 }
 
 DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
@@ -468,7 +468,7 @@ DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
 	const auto& fileList = pState->selectedList;
 	const auto& outputDirectory = pState->outputFolder;
 	int numFiles = std::stoi(pState->N);
-	SendMessage(hProgressDialog, PBM_SETRANGE, 0, 100);
+	SendMessage(hProgressDialog, PBM_SETRANGE32, 0, numFiles);
 
 	for (int i = 0; i < numFiles; ++i) {
 		std::wstring sourceFile = fileList[i];
@@ -482,13 +482,13 @@ DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
 		}
 
 		// update progress
-		int progress = static_cast<int>((static_cast<float>(i + 1) / numFiles) * 100);
-		ConsoleLog("progress: ", std::to_wstring(progress));
-		UpdateProgressBar(progress);
+		int progress = static_cast<int>((static_cast<float>(i + 1) / numFiles) * 100); //debug
+		ConsoleLog("progress: ", std::to_wstring(progress));	//debug
+		UpdateProgressBar();
 	}
 
 	ShowWindow(hProgressDialog, SW_HIDE);
-	//PostQuitMessage(0);
+	PostQuitMessage(0);
 	return 0;
 }
 
@@ -519,4 +519,5 @@ void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pSt
 void ExitApp(HWND hWnd) {
 	PostQuitMessage(0);
 	DestroyWindow(hWnd);
+	ConsoleLog("MP3 randomizer ended!");
 }
