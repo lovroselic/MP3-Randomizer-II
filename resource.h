@@ -6,12 +6,9 @@
 #define IDR_MENU1                       101
 #define IDD_DIALOG2                     105
 #define IDD_DIALOG3                     108
-#define IDD_DIALOG4                     110
-#define IDD_DIALOG_COPY                 110
 #define IDC_STATIC2                     1001
 #define IDC_NUMBER_EDIT                 1003
 #define IDC_ERROR_MSG                   1004
-#define IDC_PROGRESS1                   1005
 #define ID_SETUP_INPUTFOLDER            40001
 #define ID_SETUP_OUTPUTFOLDER           40002
 #define ID_SETUP_                       40003

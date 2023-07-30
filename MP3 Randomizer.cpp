@@ -1,5 +1,7 @@
 /*
-
+https://github.com/malortie/Tutorials/blob/master/tutorials/cpp/win32/controls/progressbar/ProgressBar.cpp
+https://stackoverflow.com/questions/55994126/updating-progress-bar-in-windows-c
+https://learn.microsoft.com/en-us/windows/win32/controls/create-progress-bar-controls
 */
 
 #include <windows.h>
@@ -14,17 +16,20 @@
 #include <codecvt>
 #include <locale>
 #include <filesystem>
+#include <Commctrl.h>
 
 #include "LS WIN Debug.h"
 #include "LS SYSTEM.h"
 #include "LS PROTOTYPES.h"
 #include "resource.h"
 
-#define VERSION _T("v0.3.2")
+#define VERSION _T("v0.3.3")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
 #define MP3 _T(".mp3")
+
+namespace fs = std::filesystem;
 
 constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
 
@@ -60,7 +65,10 @@ void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName);
 void SaveFileList(StateInfo* pState, const std::wstring& fileName);
 void ReadFileList(StateInfo* pState, const std::wstring& fileName);
 void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFileName);
-void UpdateProgressBar(HWND hProgressDialog, int progress);
+void UpdateProgressBar(int progress);
+DWORD WINAPI CopyFilesThread(LPVOID lpParam);
+void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pState);
+void ExitApp(HWND hWnd);
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -122,6 +130,17 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		MessageBox(NULL, _T("Call to CreateWindow failed!"), _T("Windows Desktop Guided Tour"), NULL);
 		return 1;
 	}
+	RECT rcClient;
+	GetClientRect(hWnd, &rcClient);
+	InitCommonControls();
+	hProgressDialog = CreateWindowEx(0, PROGRESS_CLASS, TEXT("Copying..."), WS_CHILD | WS_VISIBLE,
+		10, rcClient.bottom - 40, rcClient.right - rcClient.left - 20, 30,
+		hWnd, NULL, hInst, NULL);
+	if (hProgressDialog == NULL) {
+		MessageBox(NULL, _T("Failed to create progress dialog!"), _T("Error"), MB_ICONERROR);
+		return 1;
+	}
+	ShowWindow(hProgressDialog, SW_HIDE);
 
 	// The parameters to ShowWindow explained:
 		// hWnd: the value returned from CreateWindow
@@ -137,7 +156,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	}
 
 	delete pState;
-
+	UnregisterClass(wcex.lpszClassName, hInstance);
 	return (int)msg.wParam;
 }
 
@@ -168,7 +187,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 		break;
 	case WM_DESTROY:
 		if (MessageBox(hWnd, L"Really quit?", TITLE, MB_OKCANCEL) == IDOK) {
-			PostQuitMessage(0);
+			ExitApp(hWnd);
 		}
 		break;
 	case WM_COMMAND:
@@ -178,7 +197,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			break;
 		case ID_SETUP_QUIT:
 			if (MessageBox(hWnd, L"Really quit?", TITLE, MB_OKCANCEL) == IDOK) {
-				PostQuitMessage(0);
+				ExitApp(hWnd);
 			}
 			break;
 		case ID_SETUP_INPUTFOLDER:
@@ -226,11 +245,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			DebugStateDisplay(pState);
 			break;
 		case ID_ACTION_COPYTOOUTPUT:
+			CopyFilesWithProgressDialog(hWnd, hProgressDialog, pState);
 			break;
 		case ID_HELP_HELP:
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), hWnd, NotYetProc);
 			break;
-
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
 		}
@@ -372,7 +391,6 @@ void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName) {
 	return;
 }
 
-
 void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName) {
 	std::wofstream file(fileName, std::ios::trunc);
 
@@ -439,6 +457,66 @@ void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFi
 	return;
 }
 
-void UpdateProgressBar(HWND hProgressDialog, int progress) {
-	SendMessage(GetDlgItem(hProgressDialog, IDC_PROGRESS1), PBM_SETPOS, progress, 0);
+void UpdateProgressBar(int progress) {
+	SendMessage(hProgressDialog, PBM_SETSTEP, (WPARAM)progress, 0);
+	SendMessage(hProgressDialog, PBM_STEPIT, 0, 0);
+	UpdateWindow(hProgressDialog); //??
+}
+
+DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
+	auto pState = static_cast<StateInfo*>(lpParam);
+	const auto& fileList = pState->selectedList;
+	const auto& outputDirectory = pState->outputFolder;
+	int numFiles = std::stoi(pState->N);
+	SendMessage(hProgressDialog, PBM_SETRANGE, 0, 100);
+
+	for (int i = 0; i < numFiles; ++i) {
+		std::wstring sourceFile = fileList[i];
+		std::wstring destinationFile = outputDirectory + L"\\" + fs::path(sourceFile).filename().wstring();
+
+		try {
+			fs::copy(sourceFile, destinationFile, fs::copy_options::overwrite_existing);
+		}
+		catch (const fs::filesystem_error& ex) {
+			// Handle error
+		}
+
+		// update progress
+		int progress = static_cast<int>((static_cast<float>(i + 1) / numFiles) * 100);
+		ConsoleLog("progress: ", std::to_wstring(progress));
+		UpdateProgressBar(progress);
+	}
+
+	ShowWindow(hProgressDialog, SW_HIDE);
+	//PostQuitMessage(0);
+	return 0;
+}
+
+void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pState) {
+
+	// Start the copy operation on a separate thread
+	DWORD threadId;
+	HANDLE hThread = CreateThread(nullptr, 0, CopyFilesThread, pState, 0, &threadId);
+	if (hThread == nullptr) {
+		// Handle error
+		return;
+	}
+
+	// Show and process the progress dialog
+	ShowWindow(hProgressDialog, SW_SHOW);
+	MSG msg;
+	while (GetMessage(&msg, nullptr, 0, 0)) {
+
+		if (!IsDialogMessage(hProgressDialog, &msg)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+	}
+	WaitForSingleObject(hThread, INFINITE);
+	CloseHandle(hThread);//??
+}
+
+void ExitApp(HWND hWnd) {
+	PostQuitMessage(0);
+	DestroyWindow(hWnd);
 }
