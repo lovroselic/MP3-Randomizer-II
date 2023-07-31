@@ -131,6 +131,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Comparators.h" />
     <ClInclude Include="LS PROTOTYPES.h" />
     <ClInclude Include="LS SYSTEM.h" />
     <ClInclude Include="LS WIN Debug.h" />
@@ -140,6 +141,7 @@
     <ResourceCompile Include="MP3 Randomizer II.rc" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Comparators.cpp" />
     <ClCompile Include="LS PROTOTYPES.cpp" />
     <ClCompile Include="LS SYSTEM.cpp" />
     <ClCompile Include="LS WIN Debug.cpp" />

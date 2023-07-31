@@ -47,4 +47,18 @@ void LogVector(const std::vector<T>& vec) {
         OutputDebugString(L"\n");
     }
 }
+
+template <typename MapType>
+void LogMap(const MapType& map) {
+    for (const auto& el : map) {
+        std::wstring str1 = to_wstring_custom(el.first);
+        OutputDebugString(str1.c_str());
+        OutputDebugString(L":\t");
+        std::wstring str2 = to_wstring_custom(el.second);
+        OutputDebugString(str2.c_str());
+        OutputDebugString(L"\n");
+    }
+}
+
+
 #endif // !LS_WIN_DEBUG

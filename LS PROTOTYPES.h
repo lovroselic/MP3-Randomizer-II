@@ -5,6 +5,9 @@
 #include <algorithm>
 #include <random>
 #include <vector>
+#include "Comparators.h"
+
+std::map<int, std::wstring, ComparatorMapKey> SortMapByValueDescending(const std::map<std::wstring, int>& inputMap);
 
 template <typename T>
 std::vector<T> SelectRandomElements(const std::vector<T>& input, int N) {

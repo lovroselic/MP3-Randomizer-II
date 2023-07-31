@@ -2,6 +2,8 @@
 
 */
 
+//#include <iostream>
+#include <map>
 #include <windows.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,8 +21,9 @@
 #include "LS SYSTEM.h"
 #include "LS PROTOTYPES.h"
 #include "resource.h"
+#include "Comparators.h"
 
-#define VERSION _T("v0.4.1")
+#define VERSION _T("v0.4.2")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -29,6 +32,7 @@
 
 namespace fs = std::filesystem;
 constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
+constexpr int TOP_M = 20;
 
 // Global variables
 struct StateInfo {
@@ -39,19 +43,25 @@ struct StateInfo {
 	std::wstring found = ZERO;
 	std::vector<std::wstring> fileList;
 	std::vector<std::wstring> selectedList;
+	std::map<std::wstring, int> mArtistCount;
+	std::map<std::wstring, int> mArtistFound;
+	std::map<int, std::wstring, ComparatorMapKey> topSelected;
+	std::map<int, std::wstring, ComparatorMapKey> topFound;
 };
 
 static TCHAR szWindowClass[] = TITLE;
 static TCHAR szTitle[100];
 static TCHAR configFile[] = L"MP3 Randomizer.cfg";
 static TCHAR listFile[] = L"MP3 Randomizer.list";
+static int topY = 5;
+static int analysisY;
 
 HINSTANCE hInst;
 HWND hProgressDialog;
 
 // Forward declarations of functions :
-LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 void PaintWindow(HWND hWnd, StateInfo* pState);
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -67,6 +77,13 @@ void UpdateProgressBar();
 DWORD WINAPI CopyFilesThread(LPVOID lpParam);
 void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pState);
 void ExitApp(HWND hWnd);
+std::map<std::wstring, int> AnalyseFileList(std::vector<std::wstring> list);
+std::wstring ExtractArtist(std::wstring path);
+std::map<int, std::wstring, ComparatorMapKey> GetTopMArtists(const std::map<std::wstring, int>& mDictionary, int M);
+
+/*
+	MAIN
+*/
 
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
 
@@ -157,6 +174,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	return (int)msg.wParam;
 }
 
+/*
+	Functions
+*/
+
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 	WORD wmId = LOWORD(wParam);
 	WORD wmEvent = HIWORD(wParam);
@@ -220,7 +241,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			break;
 		case ID_ACTION_FINDMUSIC:
 			pState->fileList = FindFilesInDirectory(pState->inputFolder, MP3);
-			LogVector(pState->fileList);
+			//LogVector(pState->fileList);
 			pState->found = std::to_wstring(pState->fileList.size());
 			InvalidateRect(hWnd, NULL, TRUE);
 			DebugStateDisplay(pState);
@@ -240,6 +261,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			pState->selected = std::to_wstring(pState->selectedList.size());
 			InvalidateRect(hWnd, NULL, TRUE);
 			DebugStateDisplay(pState);
+			pState->mArtistCount = AnalyseFileList(pState->selectedList);
+			pState->topSelected = GetTopMArtists(pState->mArtistCount, TOP_M);
+			LogMap(pState->mArtistCount);
+			LogMap(pState->topSelected);
 			break;
 		case ID_ACTION_COPYTOOUTPUT:
 			if (std::stoi(pState->selected) == 0) {
@@ -262,10 +287,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 	return 0;
 }
+
 void PaintWindow(HWND hWnd, StateInfo* pState) {
 	int x1 = 5;
 	int x2 = 120;
-	int y = 5;
+	int y = topY;
 	int dy = 20;
 	int dx = 20;
 	PAINTSTRUCT ps;
@@ -297,6 +323,7 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	TextOut(hdc, x1, y, selectedNow, (int)_tcslen(selectedNow));
 	TextOut(hdc, x2, y, pState->selected.c_str(), static_cast<int>(pState->selected.length()));
 	EndPaint(hWnd, &ps);
+	analysisY = y;
 }
 
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -430,7 +457,6 @@ void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName) {
 	return;
 }
 
-
 void SaveFileList(StateInfo* pState, const std::wstring& fileName) {
 	std::ofstream file(fileName, std::ios::trunc);
 
@@ -467,7 +493,6 @@ void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
 			pState->fileList.push_back(wstr);
 		}
 	}
-
 	file.close();
 }
 
@@ -478,6 +503,9 @@ void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFi
 	pState->found = std::to_wstring(pState->fileList.size());
 	InvalidateRect(hWnd, NULL, TRUE);
 	DebugStateDisplay(pState);
+	pState->mArtistFound = AnalyseFileList(pState->fileList);
+	pState->topFound = GetTopMArtists(pState->mArtistFound, TOP_M);
+	LogMap(pState->topFound);
 	return;
 }
 
@@ -506,7 +534,6 @@ DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
 			errorStream << L"Filesystem error when copying file: " << ex.what();
 			ConsoleLog(errorStream.str());
 		}
-
 		UpdateProgressBar();
 	}
 
@@ -516,8 +543,6 @@ DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
 }
 
 void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pState) {
-
-	// Start the copy operation on a separate thread
 	DWORD threadId;
 	HANDLE hThread = CreateThread(nullptr, 0, CopyFilesThread, pState, 0, &threadId);
 	if (hThread == nullptr) {
@@ -533,7 +558,6 @@ void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pSt
 	MSG msg;
 	while (GetMessage(&msg, nullptr, 0, 0)) {
 		if (msg.message == WM_COPY_COMPLETE) {
-			ConsoleLog("copy process complete");
 			break;
 		}
 		if (!IsDialogMessage(hProgressDialog, &msg)) {
@@ -549,5 +573,37 @@ void ExitApp(HWND hWnd) {
 	PostQuitMessage(0);
 	DestroyWindow(hProgressDialog);
 	DestroyWindow(hWnd);
-	ConsoleLog("MP3 randomizer ended!");
+}
+
+std::map<std::wstring, int> AnalyseFileList(std::vector<std::wstring> list) {
+	std::map<std::wstring, int> mDictionary;
+	std::wstring Artist;
+	for (const auto& path : list) {
+		Artist = ExtractArtist(path);
+		if (mDictionary.find(Artist) != mDictionary.end()) {
+			mDictionary[Artist]++;
+		}
+		else {
+			mDictionary.emplace(Artist, 1);
+		}
+	}
+	return mDictionary;
+}
+
+std::wstring ExtractArtist(std::wstring path) {
+	size_t startPos = path.rfind(L'-') + 2;
+	size_t endPos = path.rfind(L'.');
+	if (startPos == std::wstring::npos || endPos == std::wstring::npos) return TEXT("Unknown Artist");
+	return path.substr(startPos, endPos - startPos);
+}
+
+std::map<int, std::wstring, ComparatorMapKey> GetTopMArtists(const std::map<std::wstring, int>& mDictionary, int M) {
+	std::map<int, std::wstring, ComparatorMapKey> sortedMap = SortMapByValueDescending(mDictionary);
+	std::map<int, std::wstring, ComparatorMapKey> topMMap;
+	auto it = sortedMap.begin();
+	for (int i = 0; i < M && it != sortedMap.end(); ++i, ++it) {
+		topMMap.insert(*it);
+	}
+
+	return topMMap;
 }
