@@ -1,7 +1,5 @@
 /*
-https://github.com/malortie/Tutorials/blob/master/tutorials/cpp/win32/controls/progressbar/ProgressBar.cpp
-https://stackoverflow.com/questions/55994126/updating-progress-bar-in-windows-c
-https://learn.microsoft.com/en-us/windows/win32/controls/create-progress-bar-controls
+
 */
 
 #include <windows.h>
@@ -17,13 +15,12 @@ https://learn.microsoft.com/en-us/windows/win32/controls/create-progress-bar-con
 #include <locale>
 #include <filesystem>
 #include <Commctrl.h>
-
 #include "LS WIN Debug.h"
 #include "LS SYSTEM.h"
 #include "LS PROTOTYPES.h"
 #include "resource.h"
 
-#define VERSION _T("v0.4.0")
+#define VERSION _T("v0.4.1")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -31,7 +28,6 @@ https://learn.microsoft.com/en-us/windows/win32/controls/create-progress-bar-con
 #define WM_COPY_COMPLETE WM_USER + 1
 
 namespace fs = std::filesystem;
-
 constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
 
 // Global variables
@@ -59,6 +55,7 @@ void PaintWindow(HWND hWnd, StateInfo* pState);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
+INT_PTR CALLBACK HelpDialog(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 inline StateInfo* GetAppState(HWND hwnd);
 void DebugStateDisplay(StateInfo* pState);
 void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName);
@@ -75,7 +72,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 
 	StateInfo* pState = new (std::nothrow) StateInfo;
 	if (pState == NULL) return 0;
-
 	_stprintf_s(szTitle, _T("%s %s"), TITLE, VERSION);
 
 	WNDCLASSEX wcex;
@@ -134,7 +130,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	RECT rcClient;
 	GetClientRect(hWnd, &rcClient);
 	InitCommonControls();
-	hProgressDialog = CreateWindowEx(0, PROGRESS_CLASS, TEXT("Copying..."), WS_CHILD | WS_VISIBLE | PBS_SMOOTH,
+	hProgressDialog = CreateWindowEx(0, PROGRESS_CLASS, NULL, WS_CHILD | WS_VISIBLE | PBS_SMOOTH,
 		10, rcClient.bottom - 40, rcClient.right - rcClient.left - 20, 30,
 		hWnd, NULL, hInst, NULL);
 	if (hProgressDialog == NULL) {
@@ -246,10 +242,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			DebugStateDisplay(pState);
 			break;
 		case ID_ACTION_COPYTOOUTPUT:
+			if (std::stoi(pState->selected) == 0) {
+				MessageBox(hWnd, L"No selection created yet.", L"OK", MB_ICONERROR | MB_OK);
+				break;
+			}
 			CopyFilesWithProgressDialog(hWnd, hProgressDialog, pState);
 			break;
 		case ID_HELP_HELP:
-			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG2), hWnd, NotYetProc);
+			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG_HELP), hWnd, HelpDialog);
 			break;
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
@@ -314,6 +314,30 @@ INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPa
 	return (INT_PTR)FALSE;
 }
 
+INT_PTR CALLBACK HelpDialog(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+	HWND hHelpText = GetDlgItem(hDlg, IDC_HELP_TEXT);
+	switch (message) {
+	case WM_INITDIALOG:
+		if (hHelpText != nullptr) {
+			const wchar_t* customText =
+				L"Select input and ouput paths from where you want to copy to.\r\n"
+				L"Find your music collection with 'Find music' and store the list for future use.\r\n"
+				L"Select how many files you would like to copy.\r\n"
+				L"Created randomized list to copy.\r\n"
+				L"Copy.\r\n";
+			SetWindowText(hHelpText, customText);
+		}
+		return (INT_PTR)TRUE;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK) {
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+
+	}
+	return (INT_PTR)FALSE;
+}
+
 INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
 	int number;
 	wchar_t* gBuffer;
@@ -355,7 +379,6 @@ INT_PTR CALLBACK NotYetProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 			EndDialog(hDlg, LOWORD(wParam));
 			return (INT_PTR)TRUE;
 		}
-		break;
 	}
 	return (INT_PTR)FALSE;
 }
@@ -461,7 +484,7 @@ void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFi
 void UpdateProgressBar() {
 	SendMessage(hProgressDialog, PBM_SETSTEP, 1, 0);
 	SendMessage(hProgressDialog, PBM_STEPIT, 0, 0);
-	UpdateWindow(hProgressDialog); 
+	UpdateWindow(hProgressDialog);
 }
 
 DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
@@ -503,7 +526,6 @@ void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pSt
 		ws << L"Failed to create thread. Error code: " << dwError;
 		ConsoleLog(ws.str());
 		MessageBox(hWnd, L"Failed to start the file copying operation.", L"Error", MB_ICONERROR | MB_OK);
-		return;
 		return;
 	}
 
