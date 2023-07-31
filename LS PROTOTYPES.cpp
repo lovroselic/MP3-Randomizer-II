@@ -7,7 +7,7 @@
 #include <string>
 #include "Comparators.h"
 
-std::map<int, std::wstring, ComparatorMapKey> SortMapByValueDescending(const std::map<std::wstring, int>& inputMap) {
+std::multimap<int, std::wstring, ComparatorMapKey> SortMapByValueDescending(const std::map<std::wstring, int>& inputMap) {
 	// Create a vector of pairs from the input map
 	std::vector<std::pair<int, std::wstring>> sortedVector;
 	for (const auto& entry : inputMap) {
@@ -21,7 +21,7 @@ std::map<int, std::wstring, ComparatorMapKey> SortMapByValueDescending(const std
 	std::sort(sortedVector.begin(), sortedVector.end(), ComparatorPair());
 
 	// Create a new map with the sorted elements
-	std::map<int, std::wstring, ComparatorMapKey> sortedMap;
+	std::multimap<int, std::wstring, ComparatorMapKey> sortedMap;
 	for (const auto& entry : sortedVector) {
 		sortedMap.insert(entry);
 	}

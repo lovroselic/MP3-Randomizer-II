@@ -23,7 +23,7 @@
 #include "resource.h"
 #include "Comparators.h"
 
-#define VERSION _T("v0.4.2")
+#define VERSION _T("v0.4.3")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -45,8 +45,8 @@ struct StateInfo {
 	std::vector<std::wstring> selectedList;
 	std::map<std::wstring, int> mArtistCount;
 	std::map<std::wstring, int> mArtistFound;
-	std::map<int, std::wstring, ComparatorMapKey> topSelected;
-	std::map<int, std::wstring, ComparatorMapKey> topFound;
+	std::multimap<int, std::wstring, ComparatorMapKey> topSelected;
+	std::multimap<int, std::wstring, ComparatorMapKey> topFound;
 };
 
 static TCHAR szWindowClass[] = TITLE;
@@ -79,7 +79,7 @@ void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pSt
 void ExitApp(HWND hWnd);
 std::map<std::wstring, int> AnalyseFileList(std::vector<std::wstring> list);
 std::wstring ExtractArtist(std::wstring path);
-std::map<int, std::wstring, ComparatorMapKey> GetTopMArtists(const std::map<std::wstring, int>& mDictionary, int M);
+std::multimap<int, std::wstring, ComparatorMapKey> GetTopMArtists(const std::map<std::wstring, int>& mDictionary, int M);
 
 /*
 	MAIN
@@ -597,9 +597,9 @@ std::wstring ExtractArtist(std::wstring path) {
 	return path.substr(startPos, endPos - startPos);
 }
 
-std::map<int, std::wstring, ComparatorMapKey> GetTopMArtists(const std::map<std::wstring, int>& mDictionary, int M) {
-	std::map<int, std::wstring, ComparatorMapKey> sortedMap = SortMapByValueDescending(mDictionary);
-	std::map<int, std::wstring, ComparatorMapKey> topMMap;
+std::multimap<int, std::wstring, ComparatorMapKey> GetTopMArtists(const std::map<std::wstring, int>& mDictionary, int M) {
+	std::multimap<int, std::wstring, ComparatorMapKey> sortedMap = SortMapByValueDescending(mDictionary);
+	std::multimap<int, std::wstring, ComparatorMapKey> topMMap;
 	auto it = sortedMap.begin();
 	for (int i = 0; i < M && it != sortedMap.end(); ++i, ++it) {
 		topMMap.insert(*it);
