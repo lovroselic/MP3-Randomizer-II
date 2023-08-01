@@ -23,7 +23,7 @@
 #include "LS PROTOTYPES.h"
 #include "Comparators.h"
 
-#define VERSION _T("v0.5.0")
+#define VERSION _T("v0.5.1")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -41,8 +41,8 @@ constexpr int dy = 20;
 
 // Global variables
 struct StateInfo {
-	std::wstring inputFolder;
-	std::wstring outputFolder;
+	std::wstring inputFolder = TEXT("");
+	std::wstring outputFolder = TEXT("");
 	std::wstring N = DEFAULT_N;
 	std::wstring selected = ZERO;
 	std::wstring found = ZERO;
@@ -59,13 +59,13 @@ static TCHAR szTitle[100];
 static TCHAR configFile[] = L"MP3 Randomizer.cfg";
 static TCHAR listFile[] = L"MP3 Randomizer.list";
 static int topY = 5;
+static bool COPY_IN_PROGRESS = false;
 
 HINSTANCE hInst;
 HWND hProgressDialog;
 
 // Forward declarations of functions :
 void PaintWindow(HWND hWnd, StateInfo* pState);
-//void PaintAnalysis(HWND hWnd, StateInfo* pState);
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -207,7 +207,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 	case WM_PAINT:
 		PaintWindow(hWnd, pState);
 		break;
-	case WM_DESTROY:
+	case WM_CLOSE:
+		if (COPY_IN_PROGRESS) break;
 		if (MessageBox(hWnd, L"Really quit?", TITLE, MB_OKCANCEL) == IDOK) {
 			ExitApp(hWnd);
 		}
@@ -218,6 +219,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			DialogBox(hInst, MAKEINTRESOURCE(IDD_DIALOG1), hWnd, AboutDlgProc);
 			break;
 		case ID_SETUP_QUIT:
+			if (COPY_IN_PROGRESS) break;
 			if (MessageBox(hWnd, L"Really quit?", TITLE, MB_OKCANCEL) == IDOK) {
 				ExitApp(hWnd);
 			}
@@ -261,7 +263,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			break;
 		case ID_ACTION_COPYTOOUTPUT:
 			if (std::stoi(pState->selected) == 0) {
-				MessageBox(hWnd, L"No selection created yet.", L"OK", MB_ICONERROR | MB_OK);
+				MessageBox(hWnd, L"No selection created yet.", L"Error", MB_ICONERROR);
+				break;
+			}
+			if (pState->inputFolder == TEXT("")) {
+				MessageBox(hWnd, _T("No input path set"), _T("Error"), MB_ICONERROR);
+				break;
+			}
+			if (pState->outputFolder == TEXT("")) {
+				MessageBox(hWnd, _T("No output path set"), _T("Error"), MB_ICONERROR);
 				break;
 			}
 			CopyFilesWithProgressDialog(hWnd, hProgressDialog, pState);
@@ -322,13 +332,13 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	y += dy;
 	TextOut(hdc, x1, y, selectedNow, (int)_tcslen(selectedNow));
 	TextOut(hdc, x2, y, pState->selected.c_str(), static_cast<int>(pState->selected.length()));
-	
+
 	x2 = 200;
 	HorizontalLine(hdc, y);
-	
+
 	if (!pState->topFound.empty()) {
 		SetTextColor(hdc, TITLE_COLOR);
-		TextOut(hdc, x1-dx, y, topFound, (int)_tcslen(topFound));
+		TextOut(hdc, x1 - dx, y, topFound, (int)_tcslen(topFound));
 		SetTextColor(hdc, GREEN);
 		auto it = pState->topFound.begin();
 		for (int i = 0; i < TOP_M && it != pState->topFound.end(); ++i, ++it) {
@@ -339,7 +349,7 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 		}
 		HorizontalLine(hdc, y);
 	}
-	
+
 	if (!pState->topSelected.empty()) {
 		SetTextColor(hdc, TITLE_COLOR);
 		TextOut(hdc, x1 - dx, y, topSelected, (int)_tcslen(topSelected));
@@ -353,7 +363,7 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 		}
 		HorizontalLine(hdc, y);
 	}
-	
+
 	SelectObject(hdc, hpenOld);
 	DeleteObject(hpen);
 	EndPaint(hWnd, &ps);
@@ -538,6 +548,10 @@ void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
 }
 
 void ActionFindMusic(HWND hWnd, StateInfo* pState) {
+	if (pState->inputFolder == TEXT("")) {
+		MessageBox(NULL, _T("No input path set"), _T("Error"), MB_ICONERROR);
+		return;
+	}
 	pState->fileList = FindFilesInDirectory(pState->inputFolder, MP3);
 	pState->found = std::to_wstring(pState->fileList.size());
 	InvalidateRect(hWnd, NULL, TRUE);
@@ -557,7 +571,6 @@ void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFi
 void CreateAnalysis(StateInfo* pState) {
 	pState->mArtistFound = AnalyseFileList(pState->fileList);
 	pState->topFound = GetTopMArtists(pState->mArtistFound, TOP_M);
-	LogMap(pState->topFound);
 	return;
 }
 
@@ -573,6 +586,7 @@ DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
 	const auto& outputDirectory = pState->outputFolder;
 	int numFiles = std::stoi(pState->N);
 	SendMessage(hProgressDialog, PBM_SETRANGE32, 0, numFiles);
+	COPY_IN_PROGRESS = true;
 
 	for (int i = 0; i < numFiles; ++i) {
 		std::wstring sourceFile = fileList[i];
@@ -591,6 +605,7 @@ DWORD WINAPI CopyFilesThread(LPVOID lpParam) {
 
 	ShowWindow(hProgressDialog, SW_HIDE);
 	PostMessage(hProgressDialog, WM_COPY_COMPLETE, 0, 0);
+	COPY_IN_PROGRESS = false;
 	return 0;
 }
 
@@ -625,6 +640,7 @@ void ExitApp(HWND hWnd) {
 	PostQuitMessage(0);
 	DestroyWindow(hProgressDialog);
 	DestroyWindow(hWnd);
+	return;
 }
 
 std::map<std::wstring, int> AnalyseFileList(std::vector<std::wstring> list) {
