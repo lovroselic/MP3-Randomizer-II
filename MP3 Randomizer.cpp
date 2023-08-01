@@ -32,7 +32,10 @@
 
 namespace fs = std::filesystem;
 constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
-constexpr int TOP_M = 20;
+constexpr int TOP_M = 5;
+constexpr int WINDOW_WIDTH = 800;
+constexpr int WINDOW_HEIGHT = 600;
+constexpr int dy = 20;
 
 // Global variables
 struct StateInfo {
@@ -54,13 +57,13 @@ static TCHAR szTitle[100];
 static TCHAR configFile[] = L"MP3 Randomizer.cfg";
 static TCHAR listFile[] = L"MP3 Randomizer.list";
 static int topY = 5;
-static int analysisY;
 
 HINSTANCE hInst;
 HWND hProgressDialog;
 
 // Forward declarations of functions :
 void PaintWindow(HWND hWnd, StateInfo* pState);
+//void PaintAnalysis(HWND hWnd, StateInfo* pState);
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 INT_PTR CALLBACK NumberInputDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
@@ -72,7 +75,9 @@ void ReadStateInfoFromFile(StateInfo* pState, const std::wstring& fileName);
 void SaveStateInfoToFile(StateInfo* pState, const std::wstring& fileName);
 void SaveFileList(StateInfo* pState, const std::wstring& fileName);
 void ReadFileList(StateInfo* pState, const std::wstring& fileName);
+void ActionFindMusic(HWND hWnd, StateInfo* pState);
 void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFileName);
+void CreateAnalysis(StateInfo* pState);
 void UpdateProgressBar();
 DWORD WINAPI CopyFilesThread(LPVOID lpParam);
 void CopyFilesWithProgressDialog(HWND hWnd, HWND hProgressDialog, StateInfo* pState);
@@ -80,6 +85,7 @@ void ExitApp(HWND hWnd);
 std::map<std::wstring, int> AnalyseFileList(std::vector<std::wstring> list);
 std::wstring ExtractArtist(std::wstring path);
 std::multimap<int, std::wstring, ComparatorMapKey> GetTopMArtists(const std::map<std::wstring, int>& mDictionary, int M);
+void HorizontalLine(HDC hdc, int& y);
 
 /*
 	MAIN
@@ -133,7 +139,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		szTitle,												// szTitle: the text that appears in the title bar
 		WS_OVERLAPPEDWINDOW,									// WS_OVERLAPPEDWINDOW: the type of window to create
 		CW_USEDEFAULT, CW_USEDEFAULT,							// CW_USEDEFAULT, CW_USEDEFAULT: initial position (x, y)
-		800, 400,												// initial size (width, length)
+		WINDOW_WIDTH, WINDOW_HEIGHT,												// initial size (width, length)
 		NULL,													// NULL: the parent of this window
 		hMenu,													// hMenu: the menu handle loaded from resources
 		hInstance,												// hInstance: the first parameter from WinMain
@@ -155,10 +161,6 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		return 1;
 	}
 	ShowWindow(hProgressDialog, SW_HIDE);
-
-	// The parameters to ShowWindow explained:
-		// hWnd: the value returned from CreateWindow
-		// nCmdShow: the fourth parameter from WinMain
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
@@ -222,13 +224,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
 			pState->inputFolder = selectedFolderPath;
 			InvalidateRect(hWnd, NULL, TRUE);
-			DebugStateDisplay(pState);
 			break;
 		case ID_SETUP_OUTPUTFOLDER:
 			selectedFolderPath = ShowFolderBrowserDialog(hWnd);
 			pState->outputFolder = selectedFolderPath;
 			InvalidateRect(hWnd, NULL, TRUE);
-			DebugStateDisplay(pState);
 			break;
 		case ID_SETUP_NUMBEROFFILES:
 			wcscpy_s(gBuffer, MAX_INPUT_NUMBER_SIZE, pState->N.c_str());
@@ -237,14 +237,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 				pState->N = gBuffer;
 			}
 			InvalidateRect(hWnd, NULL, TRUE);
-			DebugStateDisplay(pState);
 			break;
 		case ID_ACTION_FINDMUSIC:
-			pState->fileList = FindFilesInDirectory(pState->inputFolder, MP3);
-			//LogVector(pState->fileList);
-			pState->found = std::to_wstring(pState->fileList.size());
-			InvalidateRect(hWnd, NULL, TRUE);
-			DebugStateDisplay(pState);
+			ActionFindMusic(hWnd, pState);
 			break;
 		case ID_SETUP_SAVECONFIG:
 			SaveStateInfoToFile(pState, configFile);
@@ -257,14 +252,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			break;
 		case ID_ACTION_RANDOMIZE:
 			pState->selectedList = SelectRandomElements(pState->fileList, std::stoi(pState->N));
-			LogVector(pState->selectedList);
 			pState->selected = std::to_wstring(pState->selectedList.size());
-			InvalidateRect(hWnd, NULL, TRUE);
-			DebugStateDisplay(pState);
 			pState->mArtistCount = AnalyseFileList(pState->selectedList);
 			pState->topSelected = GetTopMArtists(pState->mArtistCount, TOP_M);
-			LogMap(pState->mArtistCount);
-			LogMap(pState->topSelected);
+			InvalidateRect(hWnd, NULL, TRUE);
 			break;
 		case ID_ACTION_COPYTOOUTPUT:
 			if (std::stoi(pState->selected) == 0) {
@@ -292,7 +283,6 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	int x1 = 5;
 	int x2 = 120;
 	int y = topY;
-	int dy = 20;
 	int dx = 20;
 	PAINTSTRUCT ps;
 	HDC hdc;
@@ -302,7 +292,13 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	TCHAR selectedNow[] = _T("Files selected: ");
 	TCHAR found[] = _T("Files found: ");
 	TCHAR cfg[] = _T("Active configuration: ");
+	TCHAR topFound[] = _T("Top artist found: ");
+	TCHAR topSelected[] = _T("Top artist in selection: ");
 	hdc = BeginPaint(hWnd, &ps);
+
+	HPEN hpen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+	HPEN hpenOld = (HPEN)SelectObject(hdc, hpen);
+
 	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
 	TextOut(hdc, x1, y, cfg, (int)_tcslen(cfg));
 	y += dy;
@@ -322,8 +318,44 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	y += dy;
 	TextOut(hdc, x1, y, selectedNow, (int)_tcslen(selectedNow));
 	TextOut(hdc, x2, y, pState->selected.c_str(), static_cast<int>(pState->selected.length()));
+	
+	x2 = 200;
+	HorizontalLine(hdc, y);
+	
+	if (!pState->topFound.empty()) {
+		TextOut(hdc, x1-dx, y, topFound, (int)_tcslen(topFound));
+		auto it = pState->topFound.begin();
+		for (int i = 0; i < TOP_M && it != pState->topFound.end(); ++i, ++it) {
+			y += dy;
+			TextOut(hdc, x1, y, it->second.c_str(), (int)it->second.length());
+			std::wstring intAsString = std::to_wstring(it->first);
+			TextOut(hdc, x2, y, intAsString.c_str(), (int)intAsString.length());
+		}
+		HorizontalLine(hdc, y);
+	}
+	
+	if (!pState->topSelected.empty()) {
+		TextOut(hdc, x1 - dx, y, topSelected, (int)_tcslen(topSelected));
+		auto it = pState->topSelected.begin();
+		for (int i = 0; i < TOP_M && it != pState->topSelected.end(); ++i, ++it) {
+			y += dy;
+			TextOut(hdc, x1, y, it->second.c_str(), (int)it->second.length());
+			std::wstring intAsString = std::to_wstring(it->first);
+			TextOut(hdc, x2, y, intAsString.c_str(), (int)intAsString.length());
+		}
+		HorizontalLine(hdc, y);
+	}
+	
+	SelectObject(hdc, hpenOld);
+	DeleteObject(hpen);
 	EndPaint(hWnd, &ps);
-	analysisY = y;
+}
+
+void HorizontalLine(HDC hdc, int& y) {
+	y += 2 * dy;
+	MoveToEx(hdc, 0, y, NULL);
+	LineTo(hdc, WINDOW_WIDTH, y);
+	y += dy;
 }
 
 INT_PTR CALLBACK AboutDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -496,13 +528,24 @@ void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
 	file.close();
 }
 
+void ActionFindMusic(HWND hWnd, StateInfo* pState) {
+	pState->fileList = FindFilesInDirectory(pState->inputFolder, MP3);
+	pState->found = std::to_wstring(pState->fileList.size());
+	InvalidateRect(hWnd, NULL, TRUE);
+	CreateAnalysis(pState);
+	return;
+}
+
 void ActionReadFileList(HWND hWnd, StateInfo* pState, const std::wstring& listFileName) {
 	pState->fileList.clear();
 	ReadFileList(pState, listFileName);
-	LogVector(pState->fileList);
 	pState->found = std::to_wstring(pState->fileList.size());
 	InvalidateRect(hWnd, NULL, TRUE);
-	DebugStateDisplay(pState);
+	CreateAnalysis(pState);
+	return;
+}
+
+void CreateAnalysis(StateInfo* pState) {
 	pState->mArtistFound = AnalyseFileList(pState->fileList);
 	pState->topFound = GetTopMArtists(pState->mArtistFound, TOP_M);
 	LogMap(pState->topFound);
@@ -580,7 +623,7 @@ std::map<std::wstring, int> AnalyseFileList(std::vector<std::wstring> list) {
 	std::wstring Artist;
 	for (const auto& path : list) {
 		Artist = ExtractArtist(path);
-		if (mDictionary.find(Artist) != mDictionary.end()) {
+		if (mDictionary.contains(Artist)) {
 			mDictionary[Artist]++;
 		}
 		else {
