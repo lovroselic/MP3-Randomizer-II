@@ -1,8 +1,8 @@
 /*
+* TODO:
 
 */
 
-//#include <iostream>
 #include <map>
 #include <windows.h>
 #include <stdlib.h>
@@ -17,24 +17,26 @@
 #include <locale>
 #include <filesystem>
 #include <Commctrl.h>
+#include "resource.h"
 #include "LS WIN Debug.h"
 #include "LS SYSTEM.h"
 #include "LS PROTOTYPES.h"
-#include "resource.h"
 #include "Comparators.h"
 
-#define VERSION _T("v0.4.3")
+#define VERSION _T("v0.5.0")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
 #define MP3 _T(".mp3")
 #define WM_COPY_COMPLETE WM_USER + 1
+#define GREEN RGB(0,255,0)
+#define TITLE_COLOR RGB(255,128,0)
 
 namespace fs = std::filesystem;
 constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
 constexpr int TOP_M = 5;
 constexpr int WINDOW_WIDTH = 800;
-constexpr int WINDOW_HEIGHT = 600;
+constexpr int WINDOW_HEIGHT = 580;
 constexpr int dy = 20;
 
 // Global variables
@@ -139,7 +141,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		szTitle,												// szTitle: the text that appears in the title bar
 		WS_OVERLAPPEDWINDOW,									// WS_OVERLAPPEDWINDOW: the type of window to create
 		CW_USEDEFAULT, CW_USEDEFAULT,							// CW_USEDEFAULT, CW_USEDEFAULT: initial position (x, y)
-		WINDOW_WIDTH, WINDOW_HEIGHT,												// initial size (width, length)
+		WINDOW_WIDTH, WINDOW_HEIGHT,							// initial size (width, length)
 		NULL,													// NULL: the parent of this window
 		hMenu,													// hMenu: the menu handle loaded from resources
 		hInstance,												// hInstance: the first parameter from WinMain
@@ -296,11 +298,13 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	TCHAR topSelected[] = _T("Top artist in selection: ");
 	hdc = BeginPaint(hWnd, &ps);
 
-	HPEN hpen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+	HPEN hpen = CreatePen(PS_SOLID, 1, GREEN);
 	HPEN hpenOld = (HPEN)SelectObject(hdc, hpen);
-
-	FillRect(hdc, &ps.rcPaint, (HBRUSH)(COLOR_WINDOW + 1));
+	SetBkColor(hdc, RGB(0, 0, 0));
+	SetTextColor(hdc, TITLE_COLOR);
+	FillRect(hdc, &ps.rcPaint, (HBRUSH)GetStockObject(BLACK_BRUSH));
 	TextOut(hdc, x1, y, cfg, (int)_tcslen(cfg));
+	SetTextColor(hdc, GREEN);
 	y += dy;
 	x1 += dx;
 	x2 += dx;
@@ -323,7 +327,9 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	HorizontalLine(hdc, y);
 	
 	if (!pState->topFound.empty()) {
+		SetTextColor(hdc, TITLE_COLOR);
 		TextOut(hdc, x1-dx, y, topFound, (int)_tcslen(topFound));
+		SetTextColor(hdc, GREEN);
 		auto it = pState->topFound.begin();
 		for (int i = 0; i < TOP_M && it != pState->topFound.end(); ++i, ++it) {
 			y += dy;
@@ -335,7 +341,9 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	}
 	
 	if (!pState->topSelected.empty()) {
+		SetTextColor(hdc, TITLE_COLOR);
 		TextOut(hdc, x1 - dx, y, topSelected, (int)_tcslen(topSelected));
+		SetTextColor(hdc, GREEN);
 		auto it = pState->topSelected.begin();
 		for (int i = 0; i < TOP_M && it != pState->topSelected.end(); ++i, ++it) {
 			y += dy;
@@ -379,6 +387,7 @@ INT_PTR CALLBACK HelpDialog(HWND hDlg, UINT message, WPARAM wParam, LPARAM lPara
 	case WM_INITDIALOG:
 		if (hHelpText != nullptr) {
 			const wchar_t* customText =
+				L"File analysis expects file name in format: title - artist.mp3\r\n"
 				L"Select input and ouput paths from where you want to copy to.\r\n"
 				L"Find your music collection with 'Find music' and store the list for future use.\r\n"
 				L"Select how many files you would like to copy.\r\n"
@@ -499,7 +508,7 @@ void SaveFileList(StateInfo* pState, const std::wstring& fileName) {
 
 	for (const std::wstring& element : pState->fileList) {
 		int utf8Size = WideCharToMultiByte(CP_UTF8, 0, element.c_str(), -1, nullptr, 0, nullptr, nullptr);
-		if (utf8Size > 0) {
+		if (utf8Size > 1) {
 			std::string utf8Str(utf8Size - 1, '\0'); // Reserve space for null-terminator
 			WideCharToMultiByte(CP_UTF8, 0, element.c_str(), -1, utf8Str.data(), utf8Size, nullptr, nullptr);
 			file << utf8Str << std::endl;
@@ -519,7 +528,7 @@ void ReadFileList(StateInfo* pState, const std::wstring& fileName) {
 	std::string line;
 	while (std::getline(file, line)) {
 		int wideSize = MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, nullptr, 0);
-		if (wideSize > 0) {
+		if (wideSize > 1) {
 			std::wstring wstr(wideSize - 1, L'\0'); // Reserve space for null-terminator
 			MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, wstr.data(), wideSize);
 			pState->fileList.push_back(wstr);
