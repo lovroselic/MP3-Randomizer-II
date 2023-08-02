@@ -23,7 +23,7 @@
 #include "LS PROTOTYPES.h"
 #include "Comparators.h"
 
-#define VERSION _T("v0.5.1")
+#define VERSION _T("v0.6.0")
 #define TITLE _T("MP3 Randomizer II")
 #define DEFAULT_N  _T("900")
 #define ZERO _T("0");
@@ -34,9 +34,10 @@
 
 namespace fs = std::filesystem;
 constexpr int MAX_INPUT_NUMBER_SIZE = 3 + 1;
-constexpr int TOP_M = 5;
+constexpr int TOP_M = 15;
+constexpr int SPLIT_M = 5;
 constexpr int WINDOW_WIDTH = 800;
-constexpr int WINDOW_HEIGHT = 580;
+constexpr int WINDOW_HEIGHT = 600;
 constexpr int dy = 20;
 
 // Global variables
@@ -52,6 +53,7 @@ struct StateInfo {
 	std::map<std::wstring, int> mArtistFound;
 	std::multimap<int, std::wstring, ComparatorMapKey> topSelected;
 	std::multimap<int, std::wstring, ComparatorMapKey> topFound;
+	double selectedSize = 0.0;
 };
 
 static TCHAR szWindowClass[] = TITLE;
@@ -259,6 +261,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 			pState->selected = std::to_wstring(pState->selectedList.size());
 			pState->mArtistCount = AnalyseFileList(pState->selectedList);
 			pState->topSelected = GetTopMArtists(pState->mArtistCount, TOP_M);
+			pState->selectedSize = getTotalPathSize(pState->selectedList);
+			ConsoleLog("Selected size: ", pState->selectedSize);
 			InvalidateRect(hWnd, NULL, TRUE);
 			break;
 		case ID_ACTION_COPYTOOUTPUT:
@@ -293,9 +297,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) 
 
 void PaintWindow(HWND hWnd, StateInfo* pState) {
 	int x1 = 5;
-	int x2 = 120;
+	int x2 = 200;
 	int y = topY;
 	int dx = 20;
+	int splitX = 240;
 	PAINTSTRUCT ps;
 	HDC hdc;
 	TCHAR inputFolder[] = _T("Input folder: ");
@@ -306,6 +311,7 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	TCHAR cfg[] = _T("Active configuration: ");
 	TCHAR topFound[] = _T("Top artist found: ");
 	TCHAR topSelected[] = _T("Top artist in selection: ");
+	TCHAR sizeSelected[] = _T("Selection size (Mb): ");
 	hdc = BeginPaint(hWnd, &ps);
 
 	HPEN hpen = CreatePen(PS_SOLID, 1, GREEN);
@@ -332,8 +338,12 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 	y += dy;
 	TextOut(hdc, x1, y, selectedNow, (int)_tcslen(selectedNow));
 	TextOut(hdc, x2, y, pState->selected.c_str(), static_cast<int>(pState->selected.length()));
+	y += dy;
+	TextOut(hdc, x1, y, sizeSelected, (int)_tcslen(sizeSelected));
+	std::wstring selectedSize = fpToWstring(pState->selectedSize, 2);
+	TextOut(hdc, x2, y, selectedSize.c_str(), static_cast<int>(selectedSize.length()));
 
-	x2 = 200;
+	//x2 = 200;
 	HorizontalLine(hdc, y);
 
 	if (!pState->topFound.empty()) {
@@ -341,12 +351,13 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 		TextOut(hdc, x1 - dx, y, topFound, (int)_tcslen(topFound));
 		SetTextColor(hdc, GREEN);
 		auto it = pState->topFound.begin();
+		y += dy;
 		for (int i = 0; i < TOP_M && it != pState->topFound.end(); ++i, ++it) {
-			y += dy;
-			TextOut(hdc, x1, y, it->second.c_str(), (int)it->second.length());
+			TextOut(hdc, x1 + (splitX * (i / SPLIT_M)), y + (i % SPLIT_M) * dy, it->second.c_str(), (int)it->second.length());
 			std::wstring intAsString = std::to_wstring(it->first);
-			TextOut(hdc, x2, y, intAsString.c_str(), (int)intAsString.length());
+			TextOut(hdc, x2 + (splitX * (i / SPLIT_M)), y + (i % SPLIT_M) * dy, intAsString.c_str(), (int)intAsString.length());
 		}
+		y += (SPLIT_M - 1) * dy;
 		HorizontalLine(hdc, y);
 	}
 
@@ -355,12 +366,13 @@ void PaintWindow(HWND hWnd, StateInfo* pState) {
 		TextOut(hdc, x1 - dx, y, topSelected, (int)_tcslen(topSelected));
 		SetTextColor(hdc, GREEN);
 		auto it = pState->topSelected.begin();
+		y += dy;
 		for (int i = 0; i < TOP_M && it != pState->topSelected.end(); ++i, ++it) {
-			y += dy;
-			TextOut(hdc, x1, y, it->second.c_str(), (int)it->second.length());
+			TextOut(hdc, x1 + (splitX * (i / SPLIT_M)), y + (i % SPLIT_M) * dy, it->second.c_str(), (int)it->second.length());
 			std::wstring intAsString = std::to_wstring(it->first);
-			TextOut(hdc, x2, y, intAsString.c_str(), (int)intAsString.length());
+			TextOut(hdc, x2 + (splitX * (i / SPLIT_M)), y + (i % SPLIT_M) * dy, intAsString.c_str(), (int)intAsString.length());
 		}
+		y += (SPLIT_M - 1) * dy;
 		HorizontalLine(hdc, y);
 	}
 

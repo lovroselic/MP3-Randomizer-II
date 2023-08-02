@@ -18,7 +18,7 @@ void ConsoleLog(const T& message ) {
     OutputDebugString(L"\n");
 }
 
-template <typename PropertyT>
+/*template <typename PropertyT>
 void ConsoleLog(const char* label, const PropertyT& property) {
     std::basic_stringstream<typename PropertyT::value_type> wss;
     wss << label;
@@ -27,7 +27,9 @@ void ConsoleLog(const char* label, const PropertyT& property) {
     wss << property;
     OutputDebugString(wss.str().c_str());
     OutputDebugString(L"\n");
-}
+}*/
+
+
 
 template<typename T>
 std::wstring to_wstring_custom(const T& value) {
@@ -60,5 +62,12 @@ void LogMap(const MapType& map) {
     }
 }
 
-
+template <typename PropertyT>
+void ConsoleLog(const char* message, const PropertyT& property) {
+    std::wstring w_message(message, message + strlen(message));
+    OutputDebugString(w_message.c_str());
+    std::wstring str2 = to_wstring_custom(property);
+    OutputDebugString(str2.c_str());
+    OutputDebugString(L"\n");
+}
 #endif // !LS_WIN_DEBUG

@@ -1,10 +1,13 @@
-/* version 0 */
+/* version 1 */
 
 #include <ShObjIdl.h>
 #include <ShlObj.h>
 #include <string>
 #include <Windows.h>
 #include <vector>
+#include <filesystem>
+#include <stdexcept>
+
 
 std::wstring ShowFolderBrowserDialog(HWND hWnd) {
 	HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
@@ -72,4 +75,22 @@ std::vector<std::wstring> FindFilesInDirectory(const std::wstring& path, const s
 	std::vector<std::wstring> fileList;
 	FindFilesWithExtension(path, extension, fileList);
 	return fileList;
+}
+
+double getTotalPathSize(const std::vector<std::wstring>& paths) {
+	std::uintmax_t totalSize = 0;
+
+	for (const auto& pathStr : paths) {
+		std::filesystem::path path(pathStr);
+
+		if (!std::filesystem::exists(path))
+			throw std::runtime_error("Path does not exist");
+
+		if (!std::filesystem::is_regular_file(path))
+			throw std::runtime_error("Path is not a regular file");
+
+		totalSize += std::filesystem::file_size(path);
+	}
+
+	return totalSize / 1024.0 / 1024.0;
 }
